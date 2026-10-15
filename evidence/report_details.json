@@ -1,0 +1,70 @@
+{
+  "student": {
+    "student_id": "202602586",
+    "split_seed": 714,
+    "model_seed": 8779,
+    "v_ego": 10.0
+  },
+  "method": "Computed from saved replay log and trained model files with the lab's replay, split_indices, build_windows and l2_summary functions; no manual metric edits.",
+  "PercMLP+_openloop_per_seed": [
+    {
+      "seed": 8779,
+      "all": 0.790698230266571,
+      "brake_slice": 0.9989124536514282,
+      "slice_share": 0.04712544523597507
+    },
+    {
+      "seed": 8780,
+      "all": 0.7980381846427917,
+      "brake_slice": 0.9951788783073425,
+      "slice_share": 0.04712544523597507
+    },
+    {
+      "seed": 8781,
+      "all": 0.8421533107757568,
+      "brake_slice": 0.9840237498283386,
+      "slice_share": 0.04712544523597507
+    },
+    {
+      "seed": 8782,
+      "all": 0.8110977411270142,
+      "brake_slice": 0.9767029285430908,
+      "slice_share": 0.04712544523597507
+    },
+    {
+      "seed": 8783,
+      "all": 0.7888205051422119,
+      "brake_slice": 0.9741950631141663,
+      "slice_share": 0.04712544523597507
+    }
+  ],
+  "aeb_example": {
+    "segment": 63,
+    "changed_frames": [
+      {
+        "frame": 75,
+        "gap_m": 4.9981,
+        "closing_m_s": 3.3883,
+        "ttc_s": 1.4751055101378272,
+        "golden_accel": -4.384531531062755,
+        "aeb_accel": -6.0
+      },
+      {
+        "frame": 76,
+        "gap_m": 4.6866,
+        "closing_m_s": 3.2052,
+        "ttc_s": 1.4621864470235868,
+        "golden_accel": -4.363352099756803,
+        "aeb_accel": -6.0
+      },
+      {
+        "frame": 77,
+        "gap_m": 4.3966,
+        "closing_m_s": 3.0624000000000002,
+        "ttc_s": 1.435671368861024,
+        "golden_accel": -4.350441035055776,
+        "aeb_accel": -6.0
+      }
+    ]
+  }
+}
