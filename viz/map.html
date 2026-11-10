@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Looplab · Bản đồ kiểm thử</title>
+  <link rel="stylesheet" href="map.css">
+  <script src="route-sim.js" defer></script>
+  <script src="map-3d.js" defer></script>
+  <script src="map.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span>↗</span> Looplab</a>
+    <a class="back" href="./">Về mô phỏng lái xe</a>
+  </header>
+
+  <main>
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">MÔ PHỎNG ĐỊNH TUYẾN</p>
+        <h1>Bản đồ kiểm thử</h1>
+        <p class="intro">Mỗi bản đồ là một kịch bản. Xe đề xuất tuyến có thời gian di chuyển ngắn nhất và tính lại khi bạn đổi điều kiện đường.</p>
+      </div>
+      <label class="field scenario-field" for="scenario">Kịch bản kiểm thử<select id="scenario"></select></label>
+    </header>
+
+    <div class="layout">
+      <section class="panel map-panel" aria-labelledby="mapTitle">
+        <div class="panel-head">
+          <div><h2 id="mapTitle"></h2><p id="mapDescription"></p></div>
+          <div class="view-options" role="group" aria-label="Góc nhìn bản đồ">
+            <button id="view3d" type="button" aria-pressed="false">3D theo xe</button>
+            <button id="overview3d" type="button" aria-pressed="false">3D toàn cảnh</button>
+            <button id="view2d" type="button" aria-pressed="true">2D BEV</button>
+          </div>
+        </div>
+        <div class="map-area">
+          <svg id="streetMap" viewBox="0 0 720 420" role="img" aria-label="Bản đồ các giao lộ và tuyến xe đề xuất"></svg>
+          <div id="street3d" hidden></div>
+          <div id="speedHud" class="speed-hud" hidden><strong id="egoSpeed">0</strong><small>KM/H · XE TA</small></div>
+        </div>
+        <div class="transport-wrap">
+          <div class="transport">
+            <button class="primary" id="play" type="button" aria-label="Chạy xe">▶</button>
+            <button id="reset" type="button" aria-label="Về ban đầu" title="Về ban đầu">↺</button>
+            <select id="speed" aria-label="Tốc độ phát"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
+            <div class="timeline"><div id="timelineMarks" class="timeline-marks" aria-hidden="true"></div><input id="timeline" type="range" min="0" max="1" step="any" value="0" aria-label="Tua thời gian mô phỏng"></div>
+            <output id="elapsed" aria-label="Thời gian đã chạy">0,0 s</output>
+          </div>
+          <label class="inline-field" for="repeat"><input id="repeat" type="checkbox"> Lặp tự động</label>
+        </div>
+        <p id="viewNote" class="view-note" hidden></p>
+        <ul class="legend" aria-label="Chú giải bản đồ">
+          <li class="key-route">Tuyến đề xuất</li><li class="key-car">Xe ta</li>
+          <li class="key-closed">Đường đóng</li><li class="key-slow">Đường ùn tắc</li><li class="key-direction">Đường một chiều</li>
+          <li class="key-crossing" id="crossingLegend" hidden>Tác nhân băng qua</li>
+        </ul>
+      </section>
+
+      <aside class="side">
+        <section class="panel route-panel" aria-labelledby="routeTitle">
+          <p class="eyebrow" id="routeTitle">TUYẾN ĐỀ XUẤT</p>
+          <p class="status" id="status" role="status"></p>
+          <div class="route-stats">
+            <div><small>Thời gian còn lại</small><strong id="eta">—</strong></div>
+            <div><small>Quãng đường còn lại</small><strong id="distance">—</strong></div>
+          </div>
+          <label class="field" for="destination">Điểm đến<select id="destination"></select></label>
+          <ol id="directions" aria-label="Các đoạn đường theo thứ tự"></ol>
+        </section>
+        <section class="panel road-panel" aria-labelledby="roadTitle">
+          <h2 id="roadTitle">Điều kiện đường</h2>
+          <p>Bấm một đoạn trên bản đồ hoặc dùng danh sách dưới đây để đóng hay mở đường. Xe đang ở giữa đoạn sẽ đi tới giao lộ kế tiếp rồi theo tuyến mới.</p>
+          <div id="roads" class="road-list"></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

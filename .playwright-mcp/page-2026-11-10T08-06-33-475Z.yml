@@ -1,0 +1,145 @@
+- generic [ref=e2]:
+  - navigation "Main Kaggle page navigation" [ref=e3]:
+    - generic [ref=e5]:
+      - button "Navigation menu" [ref=e7] [cursor=pointer]: menu
+      - link "Skip to content" [ref=e8] [cursor=pointer]:
+        - /url: "#site-content"
+        - text: Skip tocontent
+    - button "Create on Kaggle" [ref=e10] [cursor=pointer]:
+      - generic [ref=e11]:
+        - generic:
+          - generic:
+            - paragraph: Create
+    - generic [ref=e16]:
+      - list [ref=e17]:
+        - listitem "Home List Item" [ref=e18]:
+          - link "Home" [ref=e20] [cursor=pointer]:
+            - /url: /
+            - paragraph [ref=e25]: Home
+        - listitem "Competitions List Item" [ref=e26]:
+          - link "Competitions" [ref=e28] [cursor=pointer]:
+            - /url: /competitions
+            - paragraph [ref=e33]: Competitions
+        - listitem "Benchmarks List Item" [ref=e34]:
+          - link "Benchmarks" [ref=e36] [cursor=pointer]:
+            - /url: /benchmarks
+            - paragraph [ref=e41]: Benchmarks
+        - listitem "Arenas List Item" [ref=e42]:
+          - link "Arenas" [ref=e44] [cursor=pointer]:
+            - /url: /arenas
+            - paragraph [ref=e49]: Arenas
+        - listitem "Game Arena List Item" [ref=e50]:
+          - link "Game Arena" [ref=e52] [cursor=pointer]:
+            - /url: /game-arena
+            - paragraph [ref=e57]: Game Arena
+      - list [ref=e58]:
+        - listitem "Data Hub List Item" [ref=e59]:
+          - link "Data Hub" [ref=e61] [cursor=pointer]:
+            - /url: "#"
+            - paragraph [ref=e66]: Data Hub
+      - list [ref=e67]:
+        - listitem "More on Kaggle List Item" [ref=e68]:
+          - link "More on Kaggle" [ref=e70] [cursor=pointer]:
+            - /url: "#"
+            - paragraph [ref=e75]: More
+  - main [ref=e77]:
+    - generic [ref=e79]:
+      - generic [ref=e80]: Kaggle uses cookies from Google to deliver and enhance the quality of its services and to analyze traffic.
+      - generic [ref=e81]:
+        - link "Learn more" [ref=e82] [cursor=pointer]:
+          - /url: /cookies
+        - generic [ref=e84] [cursor=pointer]: OK, Got it.
+    - generic [ref=e86]:
+      - generic [ref=e90]:
+        - generic [ref=e91]:
+          - heading [level=1] [ref=e94]:
+            - generic [ref=e95]:
+              - generic [ref=e96]:
+                - 'textbox "Title: null" [disabled] [ref=e97]'
+                - group [aria-hidden]
+              - paragraph:
+                - alert
+          - generic [ref=e98]: Draft saved
+        - generic [ref=e100]:
+          - button "File" [ref=e101]
+          - button "Edit" [ref=e102]
+          - button "View" [ref=e103]
+          - button "Run" [ref=e104]
+          - button "Help" [ref=e105]
+      - generic [ref=e107]:
+        - generic [ref=e108]:
+          - button "Add cell" [disabled] [ref=e110]
+          - button "Add cell options" [ref=e113] [cursor=pointer]:
+            - generic [ref=e114]: arrow_drop_down
+          - button "Cut cell" [disabled] [ref=e117]:
+            - generic [ref=e118]: content_cut
+          - button "Copy cell" [disabled] [ref=e120]:
+            - generic [ref=e121]: content_copy
+          - button "Paste cell" [disabled] [ref=e123]:
+            - generic [ref=e124]: content_paste
+          - button "Run current cell" [disabled] [ref=e127]:
+            - generic [ref=e128]: play_arrow
+          - button "Run All" [disabled] [ref=e130]:
+            - generic [ref=e131]: fast_forward
+          - button "Show options" [ref=e134] [cursor=pointer]:
+            - generic [aria-hidden] [ref=e135]: arrow_drop_down
+        - generic [ref=e137]:
+          - button "Error Draft Session Error" [ref=e138]:
+            - generic [ref=e139]:
+              - generic [ref=e140]:
+                - generic "Error" [ref=e141]: circle
+                - generic [ref=e142]: Draft Session
+              - generic [ref=e143]: Error
+          - button "Start session" [disabled] [ref=e144]: power_settings_new
+          - button "Factory reset" [disabled] [ref=e145]: loop
+          - button "More settings" [ref=e146] [cursor=pointer]: more_vert
+      - generic [ref=e150]:
+        - generic [ref=e151]: error
+        - generic [ref=e153]: Permission 'users.get' was denied
+      - document [ref=e160]
+      - generic [ref=e163]:
+        - button "Open console" [ref=e164] [cursor=pointer]: terminal
+        - button "Open command palette" [ref=e165] [cursor=pointer]: keyboard
+      - generic [ref=e166]:
+        - generic [ref=e168]:
+          - separator [ref=e170]
+          - generic [ref=e172]:
+            - heading "Notebook" [level=2] [ref=e174]
+            - generic [ref=e175]:
+              - generic [ref=e176] [cursor=pointer]:
+                - heading "Input" [level=3] [ref=e178]
+                - button "Collapse Input" [expanded] [ref=e179]: keyboard_arrow_up
+              - generic [ref=e182]:
+                - generic [ref=e183]:
+                  - button "Add Input" [ref=e184] [cursor=pointer]
+                  - button "Upload" [ref=e187] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=e188]: upload
+                - generic [ref=e190]:
+                  - heading "No input attached" [level=2] [ref=e191]
+                  - paragraph [ref=e192]: Attach a Kaggle dataset, model, or competition
+            - generic [ref=e193]:
+              - generic [ref=e194] [cursor=pointer]:
+                - heading "Output" [level=3] [ref=e196]
+                - button "Collapse Output" [expanded] [ref=e197]: keyboard_arrow_up
+              - list [ref=e202]:
+                - listitem [ref=e203]:
+                  - generic [ref=e204]:
+                    - button "arrow_right" [ref=e205]
+                    - generic [ref=e208]: folder
+                    - paragraph [ref=e212]: /kaggle/working
+                    - generic [ref=e214]:
+                      - button "Copy directory path (/kaggle/working)" [ref=e217] [cursor=pointer]: content_copy
+                      - button "Refresh directory contents (/kaggle/working)" [ref=e219] [cursor=pointer]: directory_sync
+            - generic [ref=e220]:
+              - generic [ref=e221] [cursor=pointer]:
+                - heading "Table of contents" [level=3] [ref=e223]
+                - button "Collapse Table of contents" [expanded] [ref=e224]: keyboard_arrow_up
+              - generic [ref=e228]:
+                - heading "No sections detected" [level=6] [ref=e229]
+                - paragraph [ref=e230]: Add markdown headers to add a section
+            - generic [ref=e232] [cursor=pointer]:
+              - heading "Session options" [level=3] [ref=e234]
+              - button "Expand Session options" [ref=e235]: keyboard_arrow_down
+        - button "Collapse Sidebar" [ref=e236] [cursor=pointer]:
+          - generic "Collapse Sidebar" [ref=e238]: arrow_right
+  - alert [ref=e239]

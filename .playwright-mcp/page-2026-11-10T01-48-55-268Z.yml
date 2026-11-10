@@ -1,0 +1,159 @@
+- generic [ref=e2]:
+  - generic "Mô phỏng 3D. Kéo để xoay, cuộn để phóng to." [ref=e3]:
+    - 'generic "Vùng lái xe: W A S D hoặc phím mũi tên, Space phanh, P tạm dừng, R chạy lại" [ref=e4]'
+    - generic:
+      - generic: muốn ≥ 16,2 m · đang 17,4 m
+      - generic: xe ta
+      - generic: ô tô chen hàng
+    - region "Quyết định của xe ta":
+      - generic:
+        - generic: Quyết định của xe ta
+        - generic: Làn phải
+      - strong: Giữ làn phải
+      - paragraph: Theo dõi xe phía trước trước khi bắt đầu vượt.
+  - generic:
+    - generic:
+      - generic: "40"
+      - generic: km/h · xe ta
+      - generic: 0,0 m/s²
+    - generic: Xe ta đang ở làn phải
+  - complementary "Điều khiển mô phỏng" [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: Mô phỏng vòng kín
+      - button "Đổi nền sáng hoặc tối" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Sáng
+        - generic [ref=e10]: Tối
+      - generic [ref=e11]: Bài lab Day 12 · Quan sát xe ta và cách giao thông phản ứng trong từng kịch bản.
+      - list "Chu trình mô phỏng" [ref=e12]:
+        - listitem [ref=e13]: Trạng thái
+        - listitem [ref=e14]: 2D BEV
+        - listitem [ref=e15]: Lệnh xe ta
+        - listitem [ref=e16]: Giao thông
+        - listitem [ref=e17]: ↺ Bước tiếp
+      - link "Trở về góc nhìn 2D BEV" [ref=e18] [cursor=pointer]:
+        - /url: http://localhost:8080/viz/?scene=continuous-drive
+      - link "Mở bản đồ kiểm thử và tìm đường" [ref=e19] [cursor=pointer]:
+        - /url: map.html
+    - region "Lái xe bằng bàn phím" [ref=e20]:
+      - button "Tự lái bằng bàn phím" [ref=e21] [cursor=pointer]
+    - generic [ref=e22]:
+      - generic [ref=e23]: Cảnh
+      - group "Cảnh" [ref=e24]:
+        - button "Xe dẫn phanh gấp" [ref=e25] [cursor=pointer]
+        - button "Xe cắt vào" [ref=e26] [cursor=pointer]
+        - button "Log thật" [ref=e27] [cursor=pointer]
+        - button "Chuyến lái liên hoàn" [pressed] [ref=e28] [cursor=pointer]
+        - button "Phải sang trái" [ref=e29] [cursor=pointer]
+        - button "Trái sang phải" [ref=e30] [cursor=pointer]
+        - button "Chen sát rồi phanh" [ref=e31] [cursor=pointer]
+        - button "Vượt bên phải rồi về làn trái" [ref=e32] [cursor=pointer]
+      - generic [ref=e33]: Xe bám đuôi (xe ngay sau xe ta)
+      - group "Xe sau" [ref=e34]:
+        - button "Phát lại (không phản ứng)" [ref=e35] [cursor=pointer]
+        - button "Phản ứng (IDM, trễ 0,6 s)" [pressed] [ref=e36] [cursor=pointer]
+      - generic [ref=e37]:
+        - generic [ref=e38]: Kết quả chuyến lái
+        - generic [ref=e39]: Thời lượng
+        - generic [ref=e40]: 77,0 s
+        - generic [ref=e41]: Va chạm liên quan đến xe ta
+        - generic [ref=e42]: "0"
+      - generic [ref=e43]:
+        - paragraph [ref=e44]: Chuyến lái đi qua các tình huống vượt xe, chen làn và nhường đường. Cuối chuyến, người đi bộ quay lại vỉa hè khi thấy xe đến nhanh. Xe ta giảm tốc và chuyển trái. Chọn một mốc để xem lại.
+        - generic [ref=e45]:
+          - button "0,7 s Ô tô chen hàng sang phải" [ref=e46] [cursor=pointer]:
+            - generic [ref=e47]: 0,7 s
+            - text: Ô tô chen hàng sang phải
+          - button "1,5 s Ô tô phanh gấp" [ref=e48] [cursor=pointer]:
+            - generic [ref=e49]: 1,5 s
+            - text: Ô tô phanh gấp
+          - button "2,1 s Xe ta chuyển sang làn trái" [ref=e50] [cursor=pointer]:
+            - generic [ref=e51]: 2,1 s
+            - text: Xe ta chuyển sang làn trái
+          - button "3,8 s Xe ta vượt bên trái" [ref=e52] [cursor=pointer]:
+            - generic [ref=e53]: 3,8 s
+            - text: Xe ta vượt bên trái
+          - button "4,8 s Xe ta trở về làn phải" [ref=e54] [cursor=pointer]:
+            - generic [ref=e55]: 4,8 s
+            - text: Xe ta trở về làn phải
+          - button "6,3 s Đã vượt và về giữa làn phải" [ref=e56] [cursor=pointer]:
+            - generic [ref=e57]: 6,3 s
+            - text: Đã vượt và về giữa làn phải
+          - button "10,5 s Xe chen từ phải sang trái" [ref=e58] [cursor=pointer]:
+            - generic [ref=e59]: 10,5 s
+            - text: Xe chen từ phải sang trái
+          - button "15,0 s Người đi bộ qua đường" [ref=e60] [cursor=pointer]:
+            - generic [ref=e61]: 15,0 s
+            - text: Người đi bộ qua đường
+          - button "15,1 s Xe ta nhường người đi bộ" [ref=e62] [cursor=pointer]:
+            - generic [ref=e63]: 15,1 s
+            - text: Xe ta nhường người đi bộ
+          - button "22,0 s Xe chuyển từ trái sang phải" [ref=e64] [cursor=pointer]:
+            - generic [ref=e65]: 22,0 s
+            - text: Xe chuyển từ trái sang phải
+          - button "29,0 s Xe máy chen làn rồi phanh" [ref=e66] [cursor=pointer]:
+            - generic [ref=e67]: 29,0 s
+            - text: Xe máy chen làn rồi phanh
+          - button "40,3 s Xe cắt ngang ở giao lộ" [ref=e68] [cursor=pointer]:
+            - generic [ref=e69]: 40,3 s
+            - text: Xe cắt ngang ở giao lộ
+          - button "51,1 s Xe ta đã qua giao lộ" [ref=e70] [cursor=pointer]:
+            - generic [ref=e71]: 51,1 s
+            - text: Xe ta đã qua giao lộ
+          - button "57,5 s Xe bất ngờ lao từ vỉa hè xuống đường" [ref=e72] [cursor=pointer]:
+            - generic [ref=e73]: 57,5 s
+            - text: Xe bất ngờ lao từ vỉa hè xuống đường
+          - button "57,6 s Xe ta chuyển trái để tránh" [ref=e74] [cursor=pointer]:
+            - generic [ref=e75]: 57,6 s
+            - text: Xe ta chuyển trái để tránh
+          - button "63,5 s Xe ta đã tránh qua ở làn trái" [ref=e76] [cursor=pointer]:
+            - generic [ref=e77]: 63,5 s
+            - text: Xe ta đã tránh qua ở làn trái
+          - button "65,0 s Xe ta về làn phải trước vạch qua đường" [ref=e78] [cursor=pointer]:
+            - generic [ref=e79]: 65,0 s
+            - text: Xe ta về làn phải trước vạch qua đường
+          - button "69,0 s Người đi bộ bước xuống đường" [ref=e80] [cursor=pointer]:
+            - generic [ref=e81]: 69,0 s
+            - text: Người đi bộ bước xuống đường
+          - button "70,3 s Người đi bộ thấy xe chạy nhanh và quay lại vỉa hè" [ref=e82] [cursor=pointer]:
+            - generic [ref=e83]: 70,3 s
+            - text: Người đi bộ thấy xe chạy nhanh và quay lại vỉa hè
+          - button "70,4 s Xe ta giảm tốc và chuyển trái tránh người đi bộ" [ref=e84] [cursor=pointer]:
+            - generic [ref=e85]: 70,4 s
+            - text: Xe ta giảm tốc và chuyển trái tránh người đi bộ
+          - button "71,3 s Người đi bộ đã trở lại vỉa hè" [ref=e86] [cursor=pointer]:
+            - generic [ref=e87]: 71,3 s
+            - text: Người đi bộ đã trở lại vỉa hè
+          - button "72,8 s Xe ta đã tránh qua người đi bộ ở làn trái" [ref=e88] [cursor=pointer]:
+            - generic [ref=e89]: 72,8 s
+            - text: Xe ta đã tránh qua người đi bộ ở làn trái
+  - group "Điều khiển thời gian" [ref=e90]:
+    - button "Dừng" [ref=e91] [cursor=pointer]: ❚❚
+    - button "Chạy lại từ đầu" [ref=e92] [cursor=pointer]: ↺
+    - button "Tốc độ phát" [ref=e93] [cursor=pointer]: 1×
+    - generic [ref=e94]:
+      - generic:
+        - generic "Ô tô chen hàng sang phải"
+        - generic "Ô tô phanh gấp"
+        - generic "Xe ta chuyển sang làn trái"
+        - generic "Xe ta vượt bên trái"
+        - generic "Xe ta trở về làn phải"
+        - generic "Đã vượt và về giữa làn phải"
+        - generic "Xe chen từ phải sang trái"
+        - generic "Người đi bộ qua đường"
+        - generic "Xe ta nhường người đi bộ"
+        - generic "Xe chuyển từ trái sang phải"
+        - generic "Xe máy chen làn rồi phanh"
+        - generic "Xe cắt ngang ở giao lộ"
+        - generic "Xe ta đã qua giao lộ"
+        - generic "Xe bất ngờ lao từ vỉa hè xuống đường"
+        - generic "Xe ta chuyển trái để tránh"
+        - generic "Xe ta đã tránh qua ở làn trái"
+        - generic "Xe ta về làn phải trước vạch qua đường"
+        - generic "Người đi bộ bước xuống đường"
+        - generic "Người đi bộ thấy xe chạy nhanh và quay lại vỉa hè"
+        - generic "Xe ta giảm tốc và chuyển trái tránh người đi bộ"
+        - generic "Người đi bộ đã trở lại vỉa hè"
+        - generic "Xe ta đã tránh qua người đi bộ ở làn trái"
+      - slider "Thời gian mô phỏng" [ref=e95]: "0.3"
+    - generic [ref=e96]: 0,3 s
+    - button "theo xe" [ref=e97] [cursor=pointer]

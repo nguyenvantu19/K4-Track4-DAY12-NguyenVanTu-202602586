@@ -1,10 +1,11 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Bài lab Day 12 · Phát lại và kiểm thử vòng kín</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Spectral:ital,wght@0,500;1,500&display=swap">
 <style>
-/* Layout: one-screen app. The 3D street fills the viewport; a chapter rail floats left; a transport bar floats bottom; a HUD top-right.
+.follow-only:not([hidden]) { display: contents; }
+.journey-stages { display: grid; gap: 4px; margin-top: 9px; }
+.journey-stages button { text-align: left; color: var(--ink); font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-solid); cursor: pointer; }
+.journey-stages button span { color: var(--teal); display: inline-block; min-width: 52px; }
+/* Layout: a world view, a control rail, a transport bar and a HUD.
    Colour code (same family as "Vòng lặp mô phỏng"): red = our car (ego), blue = what was recorded (log, scan), teal = the planner's plan,
    purple = other agents' behaviour, orange = a collision, gold = people and labels, green = safe / passed. */
 :root {
@@ -55,6 +56,45 @@ button, input, select { font: inherit; color: inherit; }
 #stage { position: absolute; inset: 0; }
 #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 #stage canvas:active { cursor: grabbing; }
+.app:not(.view-3d) #stage { inset: 16px 16px 88px 452px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; }
+#stage .bev-canvas { cursor: default; touch-action: auto; }
+.view-caption { position: absolute; top: 16px; left: 16px; pointer-events: none; }
+.view-caption strong { display: block; font-size: 15px; }
+.view-caption span { color: var(--ink-2); font-size: 12px; }
+.bev-legend { position: absolute; right: 14px; bottom: 14px; display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
+.bev-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; background: currentColor; }
+.view-3d .view-caption, .view-3d .bev-legend { display: none; }
+.app:not(.view-3d) .hud { top: 28px; right: 28px; }
+.decision-card { position: absolute; z-index: 2; top: 88px; right: 16px; width: min(310px, calc(100% - 32px)); padding: 10px 13px; pointer-events: none;
+  background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--plan); border-radius: 10px; box-shadow: 0 2px 12px #0001; }
+.decision-card[data-tone="gold"] { border-left-color: var(--gold); }
+.decision-card .decision-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--ink-2); font-size: 11px; }
+.decision-card strong { display: block; font-size: 15px; }
+.decision-card p { margin: 2px 0 0; color: var(--ink-2); font-size: 12px; }
+.decision-card button { cursor: pointer; pointer-events: auto; }
+#openJourneyArchitecture { margin-top: 6px; padding: 0; border: 0; background: none; color: var(--blue); font-size: 12px; text-decoration: underline; }
+.decision-loop { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--line); }
+.decision-loop ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; padding: 0; margin: 5px 0 0; list-style: none; }
+.decision-loop li { position: relative; }
+.decision-loop li:not(:last-child)::after { content: "›"; position: absolute; top: 50%; right: -7px; transform: translateY(-50%); color: var(--ink-2); }
+.decision-loop button { width: 100%; height: 100%; padding: 4px 1px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-solid); font-size: 10px; line-height: 1.2; }
+.decision-loop button small { display: block; font-size: 9px; color: var(--ink-2); margin-top: 2px; }
+.decision-loop button[aria-current="step"] { border-color: var(--plan); background: var(--chip); box-shadow: inset 0 -2px var(--plan); font-weight: 700; }
+.decision-loop .loop-return { text-align: right; color: var(--ink-2); font-size: 10px; }
+.decision-loop .loop-detail { min-height: 2.6em; line-height: 1.3; }
+.journey-architecture { margin: 12px 0; padding: 10px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 8px; }
+.journey-architecture summary { cursor: pointer; font-weight: 650; color: var(--ink); }
+.journey-architecture .arch-trace { border-left: 3px solid var(--plan); padding: 6px 8px; background: var(--bg); margin-block: 8px; }
+.journey-architecture .arch-trace p { margin: 2px 0; }
+.journey-architecture ol { padding-inline-start: 22px; }
+.journey-architecture li + li { margin-top: 5px; }
+.journey-architecture .arch-jumps { display: flex; flex-wrap: wrap; gap: 5px; }
+.journey-architecture .arch-jumps button { cursor: pointer; padding: 3px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font: inherit; }
+.journey-architecture .arch-jumps button:disabled { opacity: .6; cursor: default; }
+.nvidia-review label { display: block; margin-top: 8px; font-weight: 600; }
+.nvidia-review input, .nvidia-review video { display: block; width: 100%; }
+.nvidia-review video { max-height: 220px; margin-top: 6px; background: var(--ink); }
+.nvidia-review pre { max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px; background: var(--bg); }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .lbl { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font: 600 11px/1.2 var(--f-mono); letter-spacing: .02em;
   padding: 2px 6px; border-radius: 4px; background: var(--panel-solid); color: var(--ink); border: 1px solid var(--line); }
@@ -71,6 +111,10 @@ button, input, select { font: inherit; color: inherit; }
 .rail-head { padding: 16px 20px 10px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: start; }
 .brand { font: italic 500 26px/1.1 var(--f-display); letter-spacing: -.01em; }
 .brand-sub { grid-column: 1 / -1; color: var(--ink-2); font-size: 13px; }
+.loop { grid-column: 1 / -1; margin: 5px 0 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; list-style: none; font-size: 11px; }
+.loop li { padding: 3px 5px; border: 1px solid var(--line); background: var(--chip); border-radius: 5px; white-space: nowrap; }
+.loop li:last-child { color: var(--teal); }
+.view-switch { grid-column: 1 / -1; width: fit-content; color: var(--blue); font-size: 12px; font-weight: 600; }
 .theme-btn { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--chip); border: 1px solid var(--line); cursor: pointer; }
 .theme-btn span { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 :root:not([data-theme="dark"]) .theme-btn [data-v="light"], :root[data-theme="dark"] .theme-btn [data-v="dark"] { background: var(--panel-solid); color: var(--ink); }
@@ -80,6 +124,14 @@ button, input, select { font: inherit; color: inherit; }
 
 .body { padding: 14px 20px 18px; overflow-y: auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 .body > * { flex-shrink: 0; }
+.driving-panel { padding: 12px 20px; border-block: 1px solid var(--line); flex: none; }
+.driving-panel .btn { width: 100%; }
+.driving-panel #runLocalTrial { margin-bottom: 6px; border-color: var(--plan); color: var(--teal); }
+.driving-panel #trajectoryToggle { margin-top: 6px; }
+.driving-panel #trajectoryToggle[aria-pressed="true"] { border-color: var(--plan); }
+.driving-panel p { margin: 8px 0 0; color: var(--ink-2); font-size: 13px; }
+.driving-panel kbd { display: inline-block; min-width: 22px; text-align: center; margin: 2px 0; }
+#driveStatus { color: var(--ego); font-weight: 600; }
 .eyebrow { font: 600 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .body h2 { margin: 0; font: italic 500 23px/1.2 var(--f-display); text-wrap: balance; }
 .body p { margin: 0; color: var(--ink-2); max-width: 62ch; font-size: 14.5px; }
@@ -160,31 +212,92 @@ button, input, select { font: inherit; color: inherit; }
   body { overflow: auto; }
   .app { height: auto; min-height: 100%; display: flex; flex-direction: column; }
   #stage { position: relative; height: 56vh; min-height: 320px; flex: none; order: 1; }
+  .app:not(.view-3d) #stage { inset: auto; height: 46vh; margin: 10px 16px 0; }
   .hud { top: 10px; right: 10px; transform: scale(.8); transform-origin: top right; z-index: 2; }
+  .app:not(.view-3d) .hud { top: 22px; right: 26px; }
   .hud .mode { display: none; }
+  .decision-card { top: 60px; right: 10px; width: min(260px, calc(100% - 20px)); padding: 7px 10px; }
   .toast { top: 70px; max-width: 90%; }
   .bar { position: relative; left: auto; right: auto; bottom: auto; margin: 10px 16px 0; height: 52px; order: 2; }
   .rail { position: relative; left: auto; top: auto; bottom: auto; width: auto; margin: 10px 16px 16px; order: 3; }
   .body { overflow: visible; }
   .bar .tbtn.cam { display: none; }
+  .app:not(.view-3d) .bar .tbtn.cam { display: block; }
+}
+@media (max-width: 410px) {
+  .bev-legend { right: 8px; gap: 4px 7px; padding: 4px 6px; font-size: 10px; }
+  .bev-legend i { width: 6px; height: 6px; }
+  .bar { gap: 6px; padding: 0 8px; }
+  .bar .tbtn { padding-inline: 6px; }
+  .bar .scrub { min-width: 32px; }
+  .bar .tread { min-width: 48px; font-size: 12px; }
+}
+@media (max-width: 360px) {
+  .bar { height: auto; min-height: 52px; padding-block: 6px; flex-wrap: wrap; }
+  .bar .scrub { order: 1; flex-basis: 100%; height: 25px; }
 }
 @media (prefers-reduced-motion: reduce) { .tog input, .tog input::after { transition: none; } }
 </style>
 
 <div class="app" id="app">
-  <div id="stage" aria-label="Mô phỏng 3D: một đoạn phố, xe đỏ là xe ta do model của bài lab lái. Kéo để xoay, cuộn để phóng to."><div id="labels"></div></div>
+  <div id="stage" aria-label="Mô phỏng xe nhìn từ trên xuống">
+    <div id="labels"></div>
+    <section class="decision-card" id="decisionCard" aria-label="Quyết định của xe ta" hidden>
+      <div class="decision-meta"><span id="decisionSource">Quyết định của xe ta</span><span id="decisionLane"></span></div>
+      <strong id="decisionAction"></strong>
+      <p id="decisionReason"></p>
+      <p id="decisionRear" hidden></p>
+      <p id="decisionTraffic" hidden>Ô tô vượt từ phía sau đang bật xi nhan phải.</p>
+      <div class="decision-loop" id="decisionLoop" aria-label="Theo dõi các khâu trong vòng kín">
+        <div class="decision-meta"><span>Vòng kín của lab · minh họa chậm</span><span id="decisionLoopStep"></span></div>
+        <ol>
+          <li><button type="button">Trạng thái<small>Quan sát</small></button></li>
+          <li><button type="button">Lệnh xe ta<small>Driver</small></button></li>
+          <li><button type="button">Giao thông<small>TrafficSim</small></button></li>
+          <li><button type="button">Áp dụng lệnh<small>Controller</small></button></li>
+        </ol>
+        <p class="loop-return">↺ Về trạng thái mới</p>
+        <p class="loop-detail" id="decisionLoopDetail"></p>
+        <p><b>BEV 2D</b> dùng bản ghi để vẽ cảnh từ trên xuống cho người xem. Driver của lab dùng trạng thái xe và tác nhân.</p>
+      </div>
+      <button type="button" id="openJourneyArchitecture" aria-controls="journeyArchitecture">Xem vòng kín AlpaSim</button>
+    </section>
+    <div class="view-caption"><strong>Góc nhìn 2D BEV</strong><span>Bắc ở phía trên · Mỗi bước 0,05 s</span></div>
+    <div class="bev-legend" aria-label="Chú giải">
+      <span><i class="c-ego"></i>Xe ta</span><span><i class="c-purple"></i>Xe sau</span><span><i class="c-blue"></i>Xe khác</span><span><i class="c-gold"></i>Người đi bộ</span>
+      <span id="mergeLegend" hidden><i class="c-teal"></i>Xe chen làn</span>
+    </div>
+  </div>
   <div class="hud" aria-live="off">
-    <div><div class="v" id="hudV">0</div><div class="u">km/h · xe ta</div></div>
+    <div><div class="v" id="hudV">0</div><div class="u">km/h · xe ta</div><div class="u" id="hudAcc">0,0 m/s²</div></div>
     <div class="mode" id="hudMode">Bài lab</div>
   </div>
   <div class="toast" id="toast" hidden></div>
 
-  <aside class="rail" aria-label="Các chương">
+  <aside class="rail" aria-label="Điều khiển mô phỏng">
     <div class="rail-head">
-      <div class="brand">Bài lab Day 12</div>
+      <div class="brand">Mô phỏng vòng kín</div>
       <button class="theme-btn" id="themeBtn" type="button" aria-label="Đổi nền sáng hoặc tối"><span data-v="light">Sáng</span><span data-v="dark">Tối</span></button>
-      <div class="brand-sub">Các model của bài lab lái trong cùng một đoạn phố: so vòng hở với vòng kín, xe sau phát lại với phản ứng, rồi đọc cổng phát hành.</div>
+      <div class="brand-sub">Bài lab Day 12 · Quan sát xe ta và cách giao thông phản ứng trong từng kịch bản.</div>
+      <ol class="loop" aria-label="Chu trình mô phỏng">
+        <li>Trạng thái</li><li>2D BEV</li><li>Lệnh xe ta</li><li>Giao thông</li><li>↺ Bước tiếp</li>
+      </ol>
+      <a class="view-switch" id="viewSwitch" href="?view=3d">Mở góc nhìn 3D</a>
+      <a class="view-switch" href="map.html">Mở bản đồ kiểm thử và tìm đường</a>
+      <a class="view-switch" href="pandaset.html">Mở cảnh thật PandaSet</a>
     </div>
+    <section class="driving-panel" aria-label="Chế độ chạy thử">
+      <button class="btn" id="runLocalTrial" type="button" hidden>Chạy thử mô phỏng</button>
+      <button class="btn primary" id="driveToggle" type="button" aria-pressed="false" aria-controls="manualHelp">Tự lái bằng bàn phím</button>
+      <button class="btn" id="trajectoryToggle" type="button" aria-pressed="false" hidden>Tự lập quỹ đạo</button>
+      <div id="manualHelp" hidden>
+        <p><kbd class="k">W</kbd> / <kbd class="k">↑</kbd> Tăng tốc · <kbd class="k">S</kbd> / <kbd class="k">↓</kbd> Phanh<br>
+        <kbd class="k">A</kbd> / <kbd class="k">←</kbd> Trái · <kbd class="k">D</kbd> / <kbd class="k">→</kbd> Phải<br>
+        <kbd class="k">Space</kbd> Phanh gấp · <kbd class="k">P</kbd> Tạm dừng / tiếp tục · <kbd class="k">R</kbd> Chạy lại</p>
+        <p>Giữ phím để điều khiển xe đỏ. Nhả ga để xe chậm dần. Thời lượng phụ thuộc vào cảnh đang chọn. Mất tiêu điểm sẽ tự tạm dừng.</p>
+        <p id="driveStatus" role="status" aria-live="polite"></p>
+      </div>
+    </section>
     <div class="body" id="body"></div>
   </aside>
 
@@ -198,10 +311,66 @@ button, input, select { font: inherit; color: inherit; }
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<template id="journeyArchitectureTemplate">
+  <details class="journey-architecture" id="journeyArchitecture">
+    <summary>Vòng kín AlpaSim · NuRec · Alpamayo</summary>
+    <p>Phác thảo tích hợp cho cảnh đang xem. Dữ liệu theo thời gian dưới đây lấy từ mô phỏng JavaScript.</p>
+    <div class="arch-jumps" aria-label="Xem các ca minh họa">
+      <button type="button" data-arch-mark="ego-left">Vượt xe phanh gấp</button>
+      <button type="button" data-arch-mark="rear-pass-signal">Ô tô phía sau bật xi nhan phải</button>
+      <button type="button" data-arch-mark="ped-avoid">Né người đi bộ</button>
+    </div>
+    <div class="arch-trace">
+      <strong data-arch-action></strong>
+      <p data-arch-reason></p>
+      <p data-arch-state></p>
+    </div>
+    <ol aria-label="Luồng dữ liệu trong một vòng mô phỏng">
+      <li><b>AlpaSim Runtime → trạng thái cảnh.</b> Đồng bộ đồng hồ, vị trí và hướng xe ta cùng các tác nhân. TrafficSim điều khiển xe khác và người đi bộ. Physics ràng buộc vị trí theo mặt đường.</li>
+      <li><b>NuRec → ảnh camera.</b> Dùng cảnh tái dựng từ dữ liệu cảm biến và vị trí camera, tác nhân ở bước hiện tại để dựng ảnh từ góc nhìn xe ta. Góc 3D và BEV ở trang này dùng để quan sát mô phỏng.</li>
+      <li><b>Alpamayo → quỹ đạo đề xuất.</b> Runtime gửi ảnh camera và lịch sử chuyển động của xe. Alpamayo 1.5 có thể nhận thêm chỉ dẫn tuyến đường. Khi tích hợp, model tự đề xuất quỹ đạo ở tình huống đang xem.</li>
+      <li><b>Controller → chuyển động → ảnh mới.</b> Controller bám quỹ đạo và cập nhật xe ta. Runtime cập nhật cảnh, yêu cầu NuRec dựng ảnh mới rồi lặp lại. Log ASL phục vụ xem lại và chấm kết quả.</li>
+    </ol>
+    <p><b>Bước tích hợp tiếp theo.</b> Chạy cảnh mẫu AlpaSim + NuRec + VaVAM và đối chiếu thời gian giữa ảnh, pose xe và log ASL. Dùng dữ liệu pose bên trên làm đầu vào tham chiếu để kiểm tra đơn vị, trục tọa độ và ID tác nhân khi chuyển ca chen phải rồi phanh gấp sang cảnh hai làn. Chạy lại cùng ca với Alpamayo, đo va chạm và khoảng hở khi làn trái trống hoặc có xe.</p>
+    <p><a href="ALPASIM-ARCHITECTURE.md?v=6">Bản phác thảo đầy đủ</a> · <a href="https://github.com/NVlabs/alpasim/blob/main/docs/TUTORIAL.md">Tutorial AlpaSim</a></p>
+  </details>
+</template>
+<template id="nvidiaReviewTemplate">
+  <details class="journey-architecture nvidia-review">
+    <summary>Kết quả Alpamayo + NuRec</summary>
+    <p>Mở tệp từ lượt chạy trên máy GPU để xem cạnh mô phỏng lab. Chọn cùng cảnh khi đối chiếu các chỉ số giữa hai Driver NVIDIA.</p>
+    <p data-review-local></p>
+    <label>Video đánh giá AlpaSim (.mp4)<input type="file" accept=".mp4,video/mp4" data-review-video></label>
+    <video controls playsinline preload="metadata" aria-label="Video đánh giá AlpaSim" data-review-player hidden></video>
+    <p data-review-status role="status"></p>
+    <label>Báo cáo metrics_results.txt<input type="file" accept=".txt,text/plain" data-review-metrics></label>
+    <pre tabindex="0" aria-label="Chỉ số AlpaSim" data-review-report hidden></pre>
+    <p data-review-metrics-status role="status"></p>
+    <button type="button" class="btn" data-review-clear hidden>Bỏ tệp đã chọn</button>
+    <p><a href="ALPASIM-ARCHITECTURE.md?v=6#:~:text=Ch%E1%BA%A1y%20v%C3%A0%20m%E1%BB%9F%20k%E1%BA%BFt%20qu%E1%BA%A3%20NVIDIA">Cách chạy và lấy tệp kết quả</a></p>
+  </details>
+</template>
 <script src="lab_models.js"></script>
 <script src="lab_data.js"></script>
-<script src="sim.js"></script>
-<script src="app.js"></script>
+<script src="sim.js?v=rear-pass-1"></script>
+<script src="merge-scenes.js?v=rear-pass-1"></script>
+<script src="keyboard.js"></script>
+<script src="bev-view.js?v=rear-pass-1"></script>
+<script src="street-view.js?v=rear-pass-1"></script>
+<script>
+  function startSimulator() {
+    var app = document.createElement("script");
+    app.src = "app.js?v=rear-pass-1";
+    document.body.appendChild(app);
+  }
+  if (new URLSearchParams(location.search).get("view") === "3d") {
+    var three = document.createElement("script");
+    three.src = "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js";
+    three.onload = three.onerror = startSimulator;
+    document.body.appendChild(three);
+  } else {
+    startSimulator();
+  }
+</script>
 
 </body></html>

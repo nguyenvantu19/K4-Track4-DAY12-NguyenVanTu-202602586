@@ -52,6 +52,10 @@
     WALK: path(seg(ROAD.walkX, 9.2, ROAD.walkX, -9.2, 0.25)),
     SWS: path(seg(-60, 8.7, 500, 8.7)), SWN: path(seg(500, -8.7, -60, -8.7))
   };
+  var JOURNEY_EXITS = {
+    W1: path(seg(X1, -1.75, X0 - 400, -1.75, 2)), W2: path(seg(X1, -5.25, X0 - 400, -5.25, 2)),
+    NB: path(seg(CX + 1.75, 400, CX + 1.75, -750, 2)), SB: path(seg(CX - 1.75, -400, CX - 1.75, 750, 2)),
+  };
   // which signal a lane obeys and where its stop line is (arc length)
   function sOf(lane, x) { return lane.charAt(0) === "E" ? x - X0 : X1 - x; }
   var STOP = { E1: ["main", sOf("E", ROAD.stopE)], E2: ["main", sOf("E", ROAD.stopE)], W1: ["main", sOf("W", ROAD.stopW)], W2: ["main", sOf("W", ROAD.stopW)],
@@ -96,17 +100,26 @@
     labfix: { name: "Bài lab · PercMLP+ (sau khi sửa)", short: "PercMLP+" }
   };
 
-  function makeActors(p) {
+  function makeActors(p, referenceJourney) {
     var A = [];
     function add(o) { o.idx = A.length; o.d = o.d || 0; A.push(o); return o; }
     function E(x) { return x - X0; } function W(x) { return X1 - x; }
-    var egoV = p.egoV0 || 11.2;
-    add({ id: "ego", name: "xe ta", kind: "ego", dims: CAR, lane: "E1", s: E(0), v: egoV, ctl: "ego", color: "ego" });
-    var L1 = add({ id: "L1", name: "xe dẫn", kind: "car", dims: CAR, lane: "E1", s: E(30), v: 11.5, ctl: "idm", p: idm({ v0: 12.2 }), color: "c1",
+    function setMerge(actor, scene, x, speed, t0) {
+      actor.lane = scene.from;
+      actor.s = E(x);
+      actor.v = speed;
+      actor.d = scene.offset || 0;
+      actor.p = idm({ v0: speed, T: 0.9, b: 3 });
+      var shift = at(LANES[scene.to], actor.s, 0).z - at(LANES[scene.from], actor.s, 0).z;
+      actor.cut = { t0: t0, dur: scene.duration, d0: actor.d, d1: shift - actor.d, brake: scene.brake, to: scene.to };
+    }
+    var merge = p.labMerge, egoLane = merge ? merge.to : (p.labOvertake && p.labOvertake.lane) || "E1", egoV = p.egoV0 || 11.2;
+    add({ id: "ego", name: "xe ta", kind: "ego", dims: CAR, lane: egoLane, s: E(0), v: egoV, ctl: "ego", color: "ego" });
+    var L1 = add({ id: "L1", name: "xe dẫn", kind: "car", dims: CAR, lane: egoLane, s: E(30), v: 11.5, ctl: "idm", p: idm({ v0: 12.2 }), color: "c1",
           brk: { t0: p.brkT0, decel: p.brkDecel, dur: p.brkDur } });
     if (p.leadProf) { L1.s = E(p.leadGap0 + CAR.len); L1.v = p.leadProf[0]; L1.prof = p.leadProf; L1.brk = null; }      // the lead drives a recorded speed profile
-    if (p.labCut) { L1.s = E(400); L1.v = 12; L1.brk = null; }                                                         // a cut-in scene: the original lead is out of the way
-    var TG = add({ id: "TG", name: "xe bám đuôi", kind: "car", dims: CAR, lane: "E1", s: E(-13), v: 11.4, ctl: "idm", p: idm({ v0: 13.5, T: p.tgT, a: 2.0, b: 3.2, s0: 1.4 }), color: "c3", dark: true });
+    if (p.labCut || merge) { L1.s = E(400); L1.v = 12; L1.brk = null; }                                                // cut-in scenes start without a lead in range
+    var TG = add({ id: "TG", name: "xe bám đuôi", kind: "car", dims: CAR, lane: egoLane, s: E(-13), v: 11.4, ctl: "idm", p: idm({ v0: 13.5, T: p.tgT, a: 2.0, b: 3.2, s0: 1.4 }), color: "c3", dark: true });
     if (p.rearGap) TG.s = E(-(CAR.len + p.rearGap));
     if (p.tgMode === "const") { TG.ctl = "const"; TG.v = egoV; }                                                         // a replayed rear car: keeps its logged speed, cannot react
     var C2 = add({ id: "C2", name: "xe chen làn", kind: "car", dims: CAR, lane: "E2", s: E(p.cutDs), v: p.cutV, ctl: "idm", p: idm({ v0: p.cutV, T: 0.9, b: 3.0 }), color: "adv",
@@ -114,6 +127,23 @@
     if (p.labCut) {   // the lab's cut-in: a slower car already `gap` m ahead in the ego lane at t = 0, holding its speed
       C2.lane = "E1"; C2.s = E(p.labCut.gap + CAR.len); C2.v = egoV - p.labCut.dv; C2.cut = null; C2.d = 0;
       C2.p = idm({ v0: Math.max(0.5, C2.v), T: 0.1, s0: 0, a: 1, b: 3 }); C2.name = "xe cắt vào";
+    } else if (merge) {
+      setMerge(C2, merge, merge.gap + CAR.len, merge.speed, merge.start);
+    }
+    if (p.labOvertake) {
+      L1.s = E(p.labOvertake.gap + CAR.len);
+      L1.v = L1.p.v0 = p.labOvertake.speed;
+      L1.brk = null;
+      L1.name = "xe chạy chậm";
+      if (p.labOvertake.cut) {
+        var opening = p.labOvertake.cut;
+        setMerge(L1, opening, p.labOvertake.gap + CAR.len, p.labOvertake.speed, opening.start);
+        L1.name = "ô tô chen hàng";
+        L1.cut.title = "Ô tô chen hàng sang phải";
+        L1.cut.brakeTitle = "Ô tô phanh gấp";
+      }
+      C2.s = E(400);
+      C2.cut = null;
     }
     add({ id: "E5", name: "xe", kind: "car", dims: CAR, lane: "E2", s: E(-46), v: 12, ctl: "idm", p: idm({ v0: 12.5 }), color: "c2" });
     add({ id: "MB", name: "xe máy", kind: "moto", dims: MOTO, lane: "E2", s: E(-70), v: 10.5, d: 1.1, ctl: "idm", p: idm({ v0: 11, T: 1.0, s0: 1.5 }), color: "c4" });
@@ -134,6 +164,35 @@
     add({ id: "P2", name: "người đi bộ", kind: "ped", dims: PED, lane: "SWS", s: 150, v: 1.3, ctl: "walk", t0: 0, vw: 1.3, color: "ped" });
     add({ id: "P3", name: "người đi bộ", kind: "ped", dims: PED, lane: "SWN", s: 260, v: 1.2, ctl: "walk", t0: 0, vw: 1.2, color: "ped" });
     add({ id: "P4", name: "người chờ xe buýt", kind: "ped", dims: PED, lane: "SWS", s: 60 + ROAD.busX + 4, v: 0, d: 0.6, ctl: "walk", t0: 1e9, vw: 0, color: "ped" });
+    if (p.labJourney) {
+      A.find(function (actor) { return actor.id === "BUS"; }).s = E(p.labJourney.pedestrianRetreat ? 650 : 470);
+      p.labJourney.cuts.forEach(function (entry) {
+        if (referenceJourney && entry.reference) entry = Object.assign({}, entry, entry.reference);
+        var actor = A.find(function (candidate) { return candidate.id === entry.actor; });
+        setMerge(actor, entry.scene, entry.x, entry.speed, entry.at);
+        actor.cut.title = entry.title;
+      });
+      if (p.labJourney.rearPass) {
+        var pass = p.labJourney.rearPass;
+        var passingCar = A.find(function (actor) { return actor.id === pass.actor; });
+        setMerge(passingCar, pass, X0, 0, Infinity);
+        passingCar.p.v0 = pass.speed;
+        passingCar.p.a = pass.acceleration;
+        passingCar.hold = Infinity;
+        passingCar.cut.mark = "rear-pass-right";
+        passingCar.name = "ô tô vượt từ phía sau";
+        passingCar.cut.title = "Ô tô từ phía sau chuyển sang làn phải";
+      }
+      var retreat = p.labJourney.pedestrianRetreat;
+      if (retreat) {
+        A.forEach(function (actor) { actor.travelPath = JOURNEY_EXITS[actor.lane]; });
+        var pedestrian = A.find(function (actor) { return actor.id === retreat.actor; });
+        pedestrian.name = "người đi bộ tại vạch qua đường";
+        pedestrian.s = pedestrian.d = 0;
+        pedestrian.walkPath = path(seg(retreat.x, 9.2, retreat.x, -9.2, .25));
+        pedestrian.crossingPhase = "waiting";
+      }
+    }
     return A;
   }
   var PARKED = [
@@ -143,6 +202,7 @@
 
   /* speed of a recorded profile (10 Hz samples) at time t; after the last sample it holds the last value */
   function profAt(P, t) { var k = t * 10, i = Math.floor(k), j = Math.min(P.length - 1, i + 1); i = Math.min(P.length - 1, i); return P[i] + (P[j] - P[i]) * (k - Math.floor(k)); }
+  function cutOffset(c, u) { return (c.d0 || 0) + c.d1 * (1 - Math.cos(Math.PI * u)) / 2; }
 
   // ------------------------------------------------------------------ geometry
   function obb(st, dims) { return { x: st.x, z: st.z, hx: st.hx, hz: st.hz, l: dims.len / 2, w: dims.wid / 2 }; }
@@ -312,7 +372,7 @@
   }
 
   // ------------------------------------------------------------------ the world (a stepper)
-  /* opts: { params, ego: "human"|"planner"|"manual"|"track"|"log", planner: "idm"|..., policy,
+  /* opts: { params, ego: "human"|"planner"|"manual"|"overtake"|"trajectory"|"track"|"log", planner: "idm"|..., policy,
              others: "reactive"|"replay", log: a finished World's record (for replay or ego "log"), track: Float32Array NF*6 (ego poses),
              takeover: frame at which the ego leaves the log and starts driving itself (needs log), egoBrake: {t0, dur, decel}, tEnd: stop early } */
   function World(opts) {
@@ -320,22 +380,52 @@
     this.opts = opts;
     var p = this.p = Object.assign({}, DEFAULTS, opts.params || {});
     this.pol = Object.assign({}, POLICY, opts.policy || {});
-    this.A = makeActors(p); this.N = this.A.length;
-    this.F = new Float32Array(NF * this.N * 8);   // x, z, hx, hz, v, a, d, flag
-    this.EGO = new Float32Array(NF * 4);          // mode, pedVisible, leader idx, steer
-    this.LS = new Int16Array(NF * this.N * 2);    // per other actor: what it reacts to (actor idx, -2 stop line, -1 nothing), and its state
+    var preferredLane = opts.ego === "trajectory" && p.labJourney && p.labJourney.preferredCarLane;
+    this.A = makeActors(p, opts.ego === "overtake"); this.N = this.A.length;
+    this.capacity = p.labJourney ? Math.max(NF, Math.round(p.labJourney.duration / DT) + 1) : NF;
+    this.nfMax = opts.tEnd ? Math.min(this.capacity, Math.round(opts.tEnd / DT) + 1) : NF;
+    this.F = new Float32Array(this.capacity * this.N * 8);   // x, z, hx, hz, v, a, d, flag
+    this.EGO = new Float32Array(this.capacity * 4);          // mode, pedVisible, leader idx, steer
+    this.decisions = opts.ego === "trajectory" || (p.labJourney && opts.ego === "overtake") ? [] : null;
+    this.LS = new Int16Array(this.capacity * this.N * 2);    // per other actor: what it reacts to (actor idx, -2 stop line, -1 nothing), and its state
     /* states: 0 free, 1 following, 2 stopping for the light, 3 yielding to a pedestrian, 4 waiting for a gap, 5 changing lane, 6 scripted hard brake, 7 walking */
     this.f = 0; this.marks = []; this.events = []; this.hit = {}; this.done = false; this.red = null; this.off = null;
-    this.tk = opts.log && opts.takeover ? opts.takeover : 0; this.nfMax = opts.tEnd ? Math.min(NF, Math.round(opts.tEnd / DT) + 1) : NF;
+    this.tk = opts.log && opts.takeover ? opts.takeover : 0;
     this.aMin = -Math.min(9, p.mu * G);
-    var e = at(LANES.E1, -X0, 0);
+    var e = this.state(this.A[0]);
+    this.egoLaneZ = e.z;
+    this.preferredLaneZ = preferredLane ? LANES[preferredLane].pts[0][1] : e.z;
+    this.returnLaneCost = preferredLane ? 2 : 4;
+    this.planLaneZ = e.z;
+    this.overtakePhase = "approach";
+    var rearPass = p.labJourney && p.labJourney.rearPass;
+    this.rearPassIndex = rearPass ? this.A.findIndex(function (actor) { return actor.id === rearPass.actor; }) : -1;
+    var retreat = p.labJourney && p.labJourney.pedestrianRetreat;
+    this.retreatActorIndex = retreat ? this.A.findIndex(function (actor) { return actor.id === retreat.actor; }) : -1;
     this.ego = { x: e.x, z: e.z, th: 0, v: this.A[0].v, steer: 0, a: 0 };
     this.vh = []; for (var k = 0; k <= 60; k++) this.vh.push(this.ego.v);   // ego speed history (newest first)
     this.hist = [];                                                     // recent state arrays (perception delay)
     this.replay = opts.others === "replay" && opts.log ? opts.log : null;
     this.pedIdx = 0; for (var i = 0; i < this.N; i++) if (this.A[i].id === "P1") this.pedIdx = i;
   }
-  World.prototype.state = function (a) { return at(LANES[a.lane], a.s, a.d); };
+  World.prototype.state = function (a) {
+    if (a.walkPath) {
+      var pedestrian = at(a.walkPath, a.s, 0);
+      if (a.crossingPhase === "retreating" || a.crossingPhase === "returned") pedestrian.hz *= -1;
+      return pedestrian;
+    }
+    var cut = a.cut, path = a.travelPath || LANES[a.lane];
+    if (!cut || !cut.to || cut.tDone != null) return at(path, a.s, a.d);
+    // Scripted merges have a fixed schedule and a smooth lateral trajectory across the divider.
+    var u = Math.max(0, Math.min(1, (this.f * DT - cut.t0) / cut.dur));
+    var pose = at(path, a.s, cutOffset(cut, u));
+    if (u > 0 && u < 1) {
+      var lateral = cut.d1 * Math.PI * Math.sin(Math.PI * u) / (2 * cut.dur);
+      var heading = Math.atan2(pose.hz, pose.hx) + Math.atan2(lateral, a.v);
+      pose.hx = Math.cos(heading); pose.hz = Math.sin(heading);
+    }
+    return pose;
+  };
   World.prototype.logPose = function (L, f, i) { var k = (f * L.N + i) * 8; return { x: L.F[k], z: L.F[k + 1], hx: L.F[k + 2], hz: L.F[k + 3], v: L.F[k + 4], a: L.F[k + 5], d: L.F[k + 6], flag: L.F[k + 7] }; };
   World.prototype.egoState = function () {
     var g = this.ego, md = this.f < this.tk ? "log" : this.opts.ego, f = this.f;
@@ -350,14 +440,9 @@
       return false;
     };
   };
-  /* cmd (manual ego only): { acc: m/s^2, steer: -1..1 } */
-  World.prototype.step = function (cmd) {
-    if (this.f >= this.nfMax) { this.done = true; return; }
-    var f = this.f, t = f * DT, A = this.A, N = this.N, p = this.p, self = this;
-    if (this.tk && f === this.tk) {   // take over from the log: start from exactly where the logged ego was
-      var q0 = this.logPose(this.opts.log, f, 0); this.ego = { x: q0.x, z: q0.z, th: Math.atan2(q0.hz, q0.hx), v: q0.v, steer: 0, a: q0.a };
-    }
-    var sts = new Array(N), acc = new Array(N).fill(0);
+  // World model observation: one set of poses shared by the ego and traffic for this tick.
+  World.prototype.observe = function () {
+    var A = this.A, N = this.N, f = this.f, sts = new Array(N);
     var es = this.egoState(); sts[0] = es; A[0].v = es.v;
     for (var i = 1; i < N; i++) {
       if (this.replay) { var q = this.logPose(this.replay, f, i); sts[i] = q; A[i].v = q.v; }
@@ -365,17 +450,31 @@
     }
     for (var i0 = 0; i0 < N; i0++) { var s0 = sts[i0]; s0.len = A[i0].dims.len; s0.wid = A[i0].dims.wid; s0.kind = A[i0].kind === "ego" ? "car" : A[i0].kind === "moto" ? "car" : A[i0].kind; s0.v = A[i0].v; s0.idx = i0; }
     this.hist.unshift(sts); if (this.hist.length > 40) this.hist.pop();
-    var occl = this.occluder(sts);
-    function perceived(delay) { var k = Math.min(self.hist.length - 1, Math.round(delay / DT)); return self.hist[k]; }
+    return sts;
+  };
+  World.prototype.perceived = function (delay) {
+    return this.hist[Math.min(this.hist.length - 1, Math.round(delay / DT))];
+  };
 
-    // ---------------- other actors
+  // Traffic agent simulator: update non-ego controls from the observed world.
+  World.prototype.updateTraffic = function (sts, acc, f, t) {
+    var A = this.A, N = this.N, p = this.p;
     var LS = this.LS;
     function mark(i, lead, code) { var k = (f * N + i) * 2; LS[k] = lead; LS[k + 1] = code; }
     if (this.replay) { var off = f * N * 2; for (var q2 = 2; q2 < N * 2; q2++) LS[off + q2] = this.replay.LS ? this.replay.LS[off + q2] : 0; }
     if (!this.replay) {
-      var seen = perceived(p.react);
+      var seen = this.perceived(p.react);
       for (var i1 = 1; i1 < N; i1++) {
         var a = A[i1], st = sts[i1];
+        if (p.labJourney && a.id === "N1" && !a.enteredCrossing && st.z <= ROAD.half) {
+          a.enteredCrossing = true;
+          this.marks.push({ t: t, k: "cross", title: "Xe cắt ngang ở giao lộ" });
+        }
+        if (a.walkPath) {
+          this.updateCrossingPedestrian(a, st, sts[0], t);
+          mark(i1, -1, a.v > 0 ? 7 : 0);
+          continue;
+        }
         if (a.ctl === "walk") {
           if (a.started == null && t >= a.t0 && (a.gap == null || this.pedGateOK(a, i1, sts, t))) { a.started = t; if (a.id === "P1") this.marks.push({ t: t, k: "ped" }); }
           a.v = a.started != null && a.s < LANES[a.lane].len - 0.1 ? a.vw : 0;
@@ -383,6 +482,7 @@
           continue;
         }
         if (a.ctl === "const") { acc[i1] = 0; mark(i1, -1, 0); continue; }
+        if (i1 === this.rearPassIndex && a.hold !== Infinity) this.updateRearPass(a, sts, t);
         if (a.hold != null && t < a.hold) { a.v = 0; mark(i1, -1, 0); continue; }
         if (a.kind === "bus" && !a.going) { if (this.crosswalkBusy(st, a, sts)) { a.v = 0; mark(i1, this.pedIdx, 4); continue; } a.going = true; this.marks.push({ t: t, k: "bus" }); }
         if (a.lane === "NR" && !a.going && light("cross", t) === "G") {
@@ -400,6 +500,14 @@
           var dw = (ROAD.walkX - st.x) * st.hx;
           if (inConf && dw > -1 && dw < 40) { var gpd = dw - a.dims.len / 2 - 2.2; if (gpd < lead[0]) lead = [Math.max(0.1, gpd), 0, this.pedIdx]; }
         }
+        if (this.opts.ego === "trajectory" && this.retreatActorIndex >= 0 && st.hx > .7 && st.z > 0 && st.z < ROAD.half) {
+          var crossingPed = sts[this.retreatActorIndex];
+          var crossingGap = crossingPed.x - st.x - a.dims.len / 2 - 2.2;
+          if (crossingPed.v > 0 && crossingPed.z > -.8 && crossingPed.z < 9.3 &&
+              crossingPed.x > st.x && crossingGap < 45 && crossingGap < lead[0]) {
+            lead = [Math.max(.1, crossingGap), 0, this.retreatActorIndex];
+          }
+        }
         // a pedestrian standing in my path (anywhere)
         var lp = leaderOf(me, view, 0.15, false); if (lp[2] >= 0 && A[lp[2]].kind === "ped" && lp[0] < lead[0]) lead = lp;
         // traffic lights
@@ -414,20 +522,29 @@
           }
         }
         acc[i1] = idmAcc(P, a.v, lead, this.aMin);
-        var code = lead[2] === 99 ? 2 : lead[2] === this.pedIdx ? 3 : lead[2] >= 0 && lead[0] < 50 ? 1 : 0;
+        var code = lead[2] === 99 ? 2 : lead[2] >= 0 && A[lead[2]].kind === "ped" ? 3 : lead[2] >= 0 && lead[0] < 50 ? 1 : 0;
         mark(i1, lead[2] === 99 ? -2 : lead[0] < 50 ? lead[2] : -1, code);
         if (a.cut) {
           var c = a.cut;
-          if (c.start == null && t >= c.t0 && this.cutGateOK(a, i1, st, sts)) { c.start = t; this.marks.push({ t: t, k: "cut" }); }
+          if (c.start == null && t >= c.t0 && (c.to || this.cutGateOK(a, i1, st, sts))) {
+            c.start = t;
+            this.marks.push({ t: t, k: c.mark || "cut", title: c.title });
+          }
           var u = c.start == null ? 0 : Math.min(1, (t - c.start) / c.dur);
-          if (c.start != null && u < 1 && !this.mergeClear(a, i1, st, sts)) { c.start += DT; u = Math.min(1, (t - c.start) / c.dur); }   // pause a merge that is blocked
-          a.d = c.d1 * (1 - Math.cos(Math.PI * u)) / 2;
-          if (u >= 1 && c.tDone == null) c.tDone = t;
+          if (c.to && t >= c.t0 + c.dur) u = 1;
+          if (!c.to && c.start != null && u < 1 && !this.mergeClear(a, i1, st, sts)) { c.start += DT; u = Math.min(1, (t - c.start) / c.dur); }   // pause a regular merge that is blocked
+          a.d = c.to && u >= 1 ? 0 : cutOffset(c, u);
+          if (u >= 1 && c.tDone == null) {
+            c.tDone = t;
+            if (c.to) { a.lane = c.to; this.marks.push({ t: t, k: "merge" }); }
+            if (c.brakeTitle) this.marks.push({ t: t, k: "brk", title: c.brakeTitle });
+          }
           if (c.brake > 0 && c.tDone != null && t < c.tDone + 2.0) acc[i1] = Math.max(this.aMin, Math.min(acc[i1], -c.brake));   // brakes right after merging
           if (c.start == null && t >= c.t0) mark(i1, LS[(f * N + i1) * 2], 4);
           if (u > 0 && u < 1) { mark(i1, LS[(f * N + i1) * 2], 5); } // while merging, also watch the car ahead in the target lane
           if (u > 0 && u < 1) {
-            var tgt = { x: st.x - st.hz * (c.d1 - a.d), z: st.z + st.hx * (c.d1 - a.d), hx: st.hx, hz: st.hz, len: a.dims.len, wid: a.dims.wid, idx: i1 };
+            var target = c.to ? at(LANES[c.to], a.s, 0) : { x: st.x - st.hz * (c.d1 - a.d), z: st.z + st.hx * (c.d1 - a.d), hx: st.hx, hz: st.hz };
+            var tgt = Object.assign(target, { len: a.dims.len, wid: a.dims.wid, idx: i1 });
             var l2 = leaderOf(tgt, view, 0.0, true); acc[i1] = Math.min(acc[i1], idmAcc(P, a.v, l2, this.aMin));
           }
         }
@@ -437,18 +554,362 @@
         if (a.prof) { acc[i1] = Math.max(this.aMin, Math.min(3.0, (profAt(a.prof, t + DT) - a.v) / DT)); mark(i1, -1, 0); }
       }
     }
+  };
 
-    // ---------------- ego
-    var md = f < this.tk ? "log" : this.opts.ego, eg = this.ego, eInfo = { mode: 0, pedVis: 0, lead: -1 };
-    if (md === "human" || md === "planner") {
-      var kind = md === "human" ? "human" : (this.opts.planner || "idm");
-      var dl = kind === "percmlp" ? this.pol.delay : kind === "idm" ? (this.pol.idmDelay || 0) : 0, pv = perceived(dl).slice(); pv[0] = es;
+  World.prototype.laneClear = function (sts, z) {
+    var ego = this.ego;
+    return sts.slice(1).every(function (actor) {
+      if (Math.abs(actor.z - z) > 1.75) return true;
+      var clearance = (actor.len + CAR.len) / 2;
+      var dx = actor.x - ego.x;
+      return dx >= clearance + 10 + Math.max(0, ego.v - actor.v) ||
+        dx <= -clearance - 8 - Math.max(0, actor.v - ego.v);
+    });
+  };
+
+  World.prototype.overtakeAction = function (sts, t) {
+    var ego = this.ego, config = this.p.labOvertake, lead = sts[1];
+    var passLeft = config.lane === "E2", homeLane = this.egoLaneZ;
+    var passingLane = LANES[passLeft ? "E1" : "E2"].pts[0][1];
+    var leave = passLeft ? "ego-left" : "ego-right", back = passLeft ? "ego-right" : "ego-left";
+    function centered(z) { return Math.abs(ego.z - z) < .3 && Math.abs(ego.th) < .08; }
+
+    var phase = this.overtakePhase;
+    if (phase === "approach" && t >= config.start && this.laneClear(sts, passingLane)) phase = leave;
+    else if (phase === leave && centered(passingLane)) phase = "ego-pass";
+    else if (phase === "ego-pass" && ego.x - lead.x >= (CAR.len + lead.len) / 2 + config.returnGap && this.laneClear(sts, homeLane)) phase = back;
+    else if (phase === back && centered(homeLane)) phase = "ego-done";
+    if (phase !== this.overtakePhase) {
+      this.overtakePhase = phase;
+      var mark = { t: t, k: phase };
+      if (passLeft) {
+        mark.title = phase === leave ? "Xe ta chuyển sang làn trái" : phase === "ego-pass" ? "Xe ta vượt bên trái" :
+          phase === back ? "Xe ta trở về làn phải" : "Đã vượt và về giữa làn phải";
+      }
+      this.marks.push(mark);
+    }
+
+    var targetZ = phase === leave || phase === "ego-pass" ? passingLane : homeLane;
+    var targetV = phase === "approach" || phase === "ego-done" ? 11 : 15;
+    ego.cmdSteer = Math.max(-.3, Math.min(.3, .08 * (targetZ - ego.z) - .85 * ego.th));
+    var acceleration = Math.min(2, 1.4 * (targetV - ego.v));
+    var currentLead = leaderOf(sts[0], sts, .15, true);
+    if (currentLead[0] < 8) acceleration = Math.min(acceleration, 1.4 * (currentLead[1] - ego.v));
+    if (this.decisions) {
+      var action = phase === "approach" ? (t >= config.start ? "wait-pass" : "approach") : phase;
+      this.decisions[this.f] = { action: action, targetZ: targetZ, lead: 1 };
+    }
+    return Math.max(this.aMin, acceleration);
+  };
+
+  World.prototype.activateRearPass = function (t) {
+    var config = this.p.labJourney.rearPass, actor = this.A[this.rearPassIndex], ego = this.ego;
+    if (actor.hold !== Infinity || ego.x < config.afterX || ego.v < 3) return;
+    var x = ego.x - config.initialGap, laneZ = LANES[config.from].pts[0][1];
+    var clear = this.A.every(function (other) {
+      if (other === actor || other.kind === "ped") return true;
+      var pose = other.kind === "ego" ? ego : this.state(other);
+      return Math.abs(pose.z - laneZ) > 1.75 || Math.abs(pose.x - x) > (actor.dims.len + other.dims.len) / 2 + 6;
+    }, this);
+    if (!clear) return;
+    actor.s = x - X0;
+    actor.v = Math.min(ego.v, config.speed);
+    actor.hold = t;
+    this.marks.push({ t: t, k: "rear-pass-approach", title: "Ô tô xuất hiện phía sau xe ta" });
+  };
+
+  World.prototype.updateRearPass = function (actor, states, t) {
+    var config = this.p.labJourney.rearPass, pose = states[actor.idx], ego = states[0];
+    var separation = pose.x - ego.x;
+    if (actor.cut.tDone != null) {
+      actor.rightIndicator = false;
+      if (!actor.passedEgo && separation > (pose.len + ego.len) / 2 + 2) {
+        actor.passedEgo = true;
+        this.marks.push({ t: t, k: "rear-pass-complete", title: "Ô tô đã vượt lên ở làn phải" });
+      }
+      return;
+    }
+    if (actor.cut.t0 !== Infinity) return;
+    var right = LANES[config.to].pts[0][1];
+    var egoInSameLane = Math.abs(ego.z - pose.z) < 1.75;
+    var ready = egoInSameLane ? separation < -5 && separation > -30 : separation > 9;
+    if (actor.signalAt == null && ready && passLaneOpen(pose, states, right, config.duration + config.signalLead)) {
+      actor.signalAt = t;
+      actor.rightIndicator = true;
+      this.marks.push({ t: t, k: "rear-pass-signal", title: "Ô tô phía sau bật xi nhan phải" });
+    }
+    if (actor.signalAt != null && t >= actor.signalAt + config.signalLead &&
+        passLaneOpen(pose, states, right, config.duration)) actor.cut.t0 = t;
+  };
+
+  World.prototype.updateCrossingPedestrian = function (actor, pose, ego, t) {
+    var config = this.p.labJourney.pedestrianRetreat;
+    var gap = pose.x - ego.x;
+    if (actor.crossingPhase === "waiting" && gap > 0 && gap <= config.startDistance) {
+      actor.crossingPhase = "crossing";
+      this.marks.push({ t: t, k: "ped-step-out", title: "Người đi bộ bước xuống đường" });
+    } else if (actor.crossingPhase === "crossing" && pose.z <= 6.75 && ego.z > 3.5 && ego.v >= config.fastSpeed && gap > 0 && gap / ego.v < 2.8) {
+      actor.crossingPhase = "retreating";
+      this.marks.push({ t: t, k: "ped-retreat", title: "Người đi bộ thấy xe chạy nhanh và quay lại vỉa hè" });
+    } else if (actor.crossingPhase === "retreating" && actor.s <= 0) {
+      actor.crossingPhase = "returned";
+      this.marks.push({ t: t, k: "ped-returned", title: "Người đi bộ đã trở lại vỉa hè" });
+    } else if (actor.crossingPhase === "crossing" && actor.s >= actor.walkPath.len) {
+      actor.crossingPhase = "crossed";
+    }
+    actor.v = actor.crossingPhase === "crossing" ? config.walkSpeed : actor.crossingPhase === "retreating" ? config.retreatSpeed : 0;
+  };
+
+  World.prototype.avoidRetreatingPedestrian = function (sts, t, control) {
+    var config = this.p.labJourney.pedestrianRetreat, ego = this.ego, actor = sts[this.retreatActorIndex];
+    var left = LANES.E1.pts[0][1], right = LANES.E2.pts[0][1];
+    var approachGap = actor.x - ego.x;
+    if (!this.pedestrianApproach && approachGap > 0 && approachGap < config.startDistance + 15 && this.laneClear(sts, right)) {
+      this.pedestrianApproach = true;
+      this.marks.push({ t: t, k: "ped-approach", title: "Xe ta về làn phải trước vạch qua đường" });
+    }
+    if (!this.pedestrianApproach) return;
+
+    var gap = actor.x - ego.x - (actor.len + CAR.len) / 2;
+    var retreating = actor.hz > .5 && actor.z <= 7.1;
+    var hazard = gap > 0 && gap < 42 && actor.z > -1 && (actor.z < 6.55 || retreating);
+    if (hazard && retreating && !this.avoidingPedestrian && this.laneClear(sts, left)) {
+      this.avoidingPedestrian = true;
+      this.marks.push({ t: t, k: "ped-avoid", title: "Xe ta giảm tốc và chuyển trái tránh người đi bộ" });
+    }
+    if (hazard && (!this.avoidingPedestrian || Math.abs(left - ego.z) > .9)) {
+      control.acc = Math.min(control.acc, idmAcc(idm(), ego.v, [gap, 0, this.retreatActorIndex], this.aMin));
+    }
+    var target = this.avoidingPedestrian ? left : right;
+    ego.cmdSteer = Math.max(-.3, Math.min(.3, .08 * (target - ego.z) - .85 * ego.th));
+    if (this.avoidingPedestrian && !this.passedPedestrian && Math.abs(left - ego.z) < .3 && gap < -(actor.len + CAR.len)) {
+      this.passedPedestrian = true;
+      this.marks.push({ t: t, k: "ped-passed", title: "Xe ta đã tránh qua người đi bộ ở làn trái" });
+    }
+    var pedestrianPhase = this.A[this.retreatActorIndex].crossingPhase;
+    control.action = this.avoidingPedestrian ? (this.passedPedestrian ? "ped-clear" : pedestrianPhase === "returned" ? "ped-returned" : "ped-avoid") :
+      hazard ? "ped-wait" : pedestrianPhase === "crossing" ? "ped-watch" : "ped-approach";
+    control.targetZ = target;
+  };
+
+  // Roll out candidate commands with the same vehicle model that executes them.
+  var PLAN_STEPS = 48;
+  function laneSteer(ego, lane) {
+    return Math.max(-.3, Math.min(.3, .08 * (lane - ego.z) - .85 * ego.th));
+  }
+  function forecastActors(states, previous, elapsed) {
+    return states.slice(1).filter(function (actor) {
+      return Math.abs(actor.x - states[0].x) < 100 && Math.abs(actor.z - states[0].z) < 34;
+    }).map(function (actor) {
+      var past = previous[actor.idx], vx = (actor.x - past.x) / elapsed, vz = (actor.z - past.z) / elapsed;
+      if (actor.kind === "ped" || past === actor || Math.hypot(vx, vz) > actor.v + 6) {
+        vx = actor.hx * actor.v;
+        vz = actor.hz * actor.v;
+      }
+      var braking = Math.min(0, (actor.v - past.v) / elapsed);
+      var forecasts = [];
+      for (var step = 2; step <= PLAN_STEPS; step += 2) {
+        var time = step * DT, factor = braking < -.1 ? Math.min(time, actor.v / -braking) : time;
+        var travel = factor + braking * factor * factor / (2 * Math.max(.1, actor.v));
+        var x = actor.x + vx * travel, z = actor.z + vz * travel;
+        if (actor.kind !== "ped" && actor.hx > .8 && Math.abs(vz) > .15) {
+          z = Math.max(Math.min(actor.z, LANES.E1.pts[0][1]), Math.min(Math.max(actor.z, LANES.E2.pts[0][1]), z));
+        }
+        forecasts.push(obb({ x: x, z: z, hx: actor.hx, hz: actor.hz }, actor));
+      }
+      return { actor: actor, boxes: forecasts };
+    });
+  }
+
+  function checkRear(ego, states) {
+    var gap = 40, index = -1;
+    for (var i = 1; i < states.length; i++) {
+      var actor = states[i];
+      if (!actor || actor.kind === "ped" || actor.x >= ego.x || actor.hx < .7 ||
+          Math.abs(actor.z - ego.z) > (CAR.wid + actor.wid) / 2 + .35) continue;
+      var clearance = Math.max(0, ego.x - actor.x - (CAR.len + actor.len) / 2);
+      if (clearance >= gap) continue;
+      gap = clearance;
+      index = i;
+    }
+    return { index: index, gap: index < 0 ? null : gap, close: index >= 0 && gap < Math.max(10, ego.v * 1.4) };
+  }
+
+  function passLaneOpen(passer, states, laneZ, horizon) {
+    return states.every(function (actor) {
+      if (actor.idx === passer.idx || actor.kind === "ped" || actor.hx < .7 || Math.abs(actor.z - laneZ) > 1.75) return true;
+      var gap = actor.x - passer.x, futureGap = gap + (actor.v - passer.v) * horizon;
+      var clearance = (actor.len + passer.len) / 2 + 2;
+      return Math.min(gap, futureGap) > clearance || Math.max(gap, futureGap) < -clearance;
+    });
+  }
+
+  World.prototype.planTrajectory = function (states, t) {
+    var ego = this.ego, history = Math.min(this.hist.length - 1, 4);
+    var actors = forecastActors(states, this.hist[history], Math.max(DT, history * DT));
+    var left = LANES.E1.pts[0][1], right = LANES.E2.pts[0][1];
+    var stopGap = ROAD.stopE - ego.x - CAR.len / 2;
+    var signal = light("main", t);
+    var stop = stopGap >= 0 && signal !== "G";
+    var maxSignalAcceleration = Infinity;
+    if (stop && stopGap < 45) {
+      // Brake toward a point 1 m before the line. If traffic made us stop
+      // farther back, allow a low-speed approach as the gap opens.
+      var distanceToStop = stopGap - 1;
+      if (distanceToStop <= .12) {
+        maxSignalAcceleration = Math.max(this.aMin, -ego.v / DT);
+      } else if (ego.v < 1.2) {
+        var crawl = Math.min(1.2, Math.sqrt(2.5 * distanceToStop));
+        maxSignalAcceleration = Math.min(.65, 1.5 * (crawl - ego.v));
+      } else {
+        maxSignalAcceleration = Math.max(this.aMin, -ego.v * ego.v / (2 * distanceToStop));
+      }
+    }
+    var intersectionExit = ROAD.crossX + ROAD.crossHalf + CAR.len / 2;
+    var intersectionAhead = ego.x <= intersectionExit && stopGap < 70;
+    var best = null, bestOnTarget = null, emergency = null, rejected = 0;
+    // A crossing pedestrian can change direction before the next prediction.
+    // Keep room to yield at the crossing until they leave the ego carriageway.
+    var crossingX = actors.reduce(function (nearest, item) {
+      var actor = item.actor;
+      return actor.kind === "ped" && actor.v > .1 && Math.abs(actor.hz) > .6 &&
+        actor.x > ego.x && actor.z > -.8 && actor.z < 9.3 ? Math.min(nearest, actor.x) : nearest;
+    }, Infinity);
+    var waiting = actors.reduce(function (nearest, item) {
+      var actor = item.actor, gap = actor.x - ego.x - CAR.len / 2;
+      return actor.kind === "ped" && actor.v < .1 && actor.hz < -.6 && actor.z >= ROAD.half - .2 &&
+        actor.z < ROAD.half + 3 && gap > 0 && gap < 85 && (!nearest || actor.x < nearest.x) ? actor : nearest;
+    }, null);
+    var rear = waiting || Number.isFinite(crossingX) ? checkRear(ego, states) : null;
+    function intersectionSpeed(x) {
+      if (!intersectionAhead || x > intersectionExit) return 13.9;
+      var gap = Math.max(0, ROAD.stopE - x - CAR.len / 2 - 7);
+      return Math.min(13.9, Math.sqrt(7 * 7 + 2 * 1.25 * gap));
+    }
+    function approachSpeed(x) {
+      var limit = intersectionSpeed(x);
+      if (!waiting) return limit;
+      var remaining = Math.max(0, waiting.x - x - CAR.len / 2 - 5);
+      return Math.min(limit, Math.sqrt(6 * 6 + 2 * (rear.close ? 1.0 : 1.35) * remaining));
+    }
+    var desired = approachSpeed(ego.x);
+    var cruise = Math.min(1.8, Math.max(-2, .8 * (desired - ego.v)));
+    var accelerations = Array.from(new Set([Math.min(cruise, maxSignalAcceleration), 0, -1.5, -3, -5, this.aMin]));
+    [left, right].forEach(function (lane) {
+      accelerations.forEach(function (acceleration) {
+        if (acceleration > maxSignalAcceleration) { rejected++; return; }
+        var sample = { x: ego.x, z: ego.z, th: ego.th, v: ego.v };
+        var path = [], conflict = PLAN_STEPS + 1, risk = 0, blocker = -1;
+        var steer = laneSteer(ego, lane);
+        for (var step = 1; step <= PLAN_STEPS; step++) {
+          advanceVehicle(sample, acceleration, laneSteer(sample, lane));
+          if (step % 2) continue;
+          var hx = Math.cos(sample.th), hz = Math.sin(sample.th);
+          var vehicle = obb({ x: sample.x, z: sample.z, hx: hx, hz: hz }, CAR);
+          if (stop && sample.x + CAR.len / 2 > ROAD.stopE - .5) { conflict = step; blocker = -2; break; }
+          if (sample.x + CAR.len / 2 + 1.5 > crossingX) { conflict = step; break; }
+          if (sample.z < CAR.wid / 2 || sample.z > ROAD.half - CAR.wid / 2) { conflict = step; break; }
+          if (waiting || intersectionAhead) risk += (waiting ? .32 : .45) * Math.pow(Math.max(0, sample.v - approachSpeed(sample.x)), 2);
+          for (var i = 0; i < actors.length; i++) {
+            var actor = actors[i].actor, box = actors[i].boxes[step / 2 - 1];
+            var dx = box.x - sample.x, dz = Math.abs(box.z - sample.z);
+            if (Math.abs(dx) > 25 || dz > 7) continue;
+            // Padding accounts for uncertainty in constant-motion predictions.
+            var margin = actor.kind === "ped" ? .75 : .35;
+            vehicle.l = CAR.len / 2 + margin;
+            vehicle.w = CAR.wid / 2 + margin;
+            if (overlap(vehicle, box)) { conflict = step; blocker = actor.idx; break; }
+            if (dx > 0 && dz < CAR.wid / 2 + box.w + .65) {
+              var gap = dx - CAR.len / 2 - box.l;
+              risk += Math.max(0, Math.min(14, 2 + sample.v * .9) - gap) * .13;
+            }
+          }
+          if (conflict <= PLAN_STEPS) break;
+          path.push({ x: sample.x, z: sample.z, hx: hx, hz: hz });
+        }
+        var cost = risk - .7 * (sample.x - ego.x) + .8 * Math.abs(acceleration) +
+          .45 * Math.abs(acceleration - ego.a) + (lane === this.preferredLaneZ ? 0 : 2.5) +
+          (lane === this.planLaneZ ? 0 : lane === this.preferredLaneZ ? this.returnLaneCost : 4) + .7 * Math.abs(sample.z - lane);
+        if (rear && rear.close) cost += 2 * Math.pow(Math.max(0, -acceleration - 1), 2);
+        var candidate = { lane: lane, acceleration: acceleration, steer: steer, path: path, cost: cost, conflict: conflict, blocker: blocker };
+        if (conflict > PLAN_STEPS) {
+          if (!best || cost < best.cost) best = candidate;
+          if (lane === this.planLaneZ && (!bestOnTarget || cost < bestOnTarget.cost)) bestOnTarget = candidate;
+        } else {
+          rejected++;
+        }
+        if (acceleration === this.aMin && (!emergency || conflict > emergency.conflict ||
+            (conflict === emergency.conflict && lane === this.planLaneZ))) emergency = candidate;
+      }, this);
+    }, this);
+    var changingLane = Math.abs(ego.z - this.planLaneZ) > .45;
+    var chosen = changingLane && bestOnTarget ? bestOnTarget : best || emergency;
+    var change = Math.abs(chosen.lane - ego.z) > .45;
+    var cautious = waiting && (desired < 13.8 || chosen.acceleration < -.5);
+    var action = !best ? "plan-emergency" : stop && stopGap < 55 ? (signal === "Y" ? "plan-yellow" : "plan-signal") :
+      Number.isFinite(crossingX) && (chosen.acceleration < -.5 || ego.v < .5) ? "plan-yield" :
+      cautious ? "plan-caution" :
+      intersectionSpeed(ego.x) < 13.8 ? "plan-intersection" :
+      change ? (chosen.lane === left ? "plan-left" : "plan-right") :
+      chosen.acceleration < -.5 ? "plan-brake" : "plan-keep";
+    if (action === "plan-intersection" && !this.intersectionCaution) {
+      this.intersectionCaution = true;
+      this.marks.push({ t: t, k: action, title: "Giảm tốc khi tới ngã tư" });
+    }
+    if (action === "plan-yellow" && !this.yellowApproach) {
+      this.yellowApproach = true;
+      this.marks.push({ t: t, k: action, title: "Đèn vàng: chủ động giảm tốc" });
+    }
+    if (stop && stopGap <= 1.15 && ego.v === 0 && !this.stoppedAtLine) {
+      this.stoppedAtLine = true;
+      this.marks.push({ t: t, k: "plan-stop-line", title: "Xe đã dừng trước vạch trắng" });
+    }
+    if (action === "plan-caution" && this.cautionActor !== waiting.idx) {
+      this.cautionActor = waiting.idx;
+      this.marks.push({ t: t, k: "plan-caution", title: "Quan sát phía sau và giảm tốc trước người chờ qua đường" });
+    }
+    if (chosen.lane !== this.planLaneZ) {
+      this.marks.push({ t: t, k: chosen.lane === left ? "ego-left" : "ego-right",
+        title: chosen.lane === left ? "Bộ lập quỹ đạo chọn làn trái" : "Bộ lập quỹ đạo chọn làn phải" });
+    }
+    this.planLaneZ = chosen.lane;
+    this.decisions[this.f] = { action: action, targetZ: chosen.lane, lead: chosen.blocker,
+      path: chosen.path, rear: rear, stopGap: stop && stopGap < 55 ? stopGap : null,
+      rejected: rejected, total: 2 * accelerations.length, horizon: PLAN_STEPS * DT };
+    ego.cmdSteer = chosen.steer;
+    return chosen.acceleration;
+  };
+
+  // Ego policy: compute acceleration and steering from the same observation.
+  World.prototype.egoAction = function (sts, acc, md, t, cmd) {
+    var es = sts[0];
+    var self = this, f = this.f, eg = this.ego, eInfo = { mode: 0, pedVis: 0, lead: -1 };
+    if (md === "trajectory") {
+      acc[0] = this.planTrajectory(sts, t);
+    } else if (md === "overtake" && !(this.p.labJourney && this.overtakePhase === "ego-done")) {
+      acc[0] = this.overtakeAction(sts, t);
+    } else if (md === "human" || md === "planner" || md === "overtake") {
+      var kind = md === "overtake" ? "labidm" : md === "human" ? "human" : (this.opts.planner || "idm");
+      var dl = kind === "percmlp" ? this.pol.delay : kind === "idm" ? (this.pol.idmDelay || 0) : 0, pv = this.perceived(dl).slice(); pv[0] = es;
+      var occl = this.occluder(sts);
       var vw = { t: t, ego: { x: es.x, z: es.z, hx: es.hx, hz: es.hz, v: eg.v, a: eg.a, len: CAR.len, wid: CAR.wid, idx: 0 }, hist: this.vh, others: pv,
-                 occl: function (x0, z0, x1, z1) { return occl(x0, z0, x1, z1, self.pedIdx); }, pedIdx: this.pedIdx, mu: p.mu };
+                 occl: function (x0, z0, x1, z1) { return occl(x0, z0, x1, z1, self.pedIdx); }, pedIdx: this.pedIdx, mu: this.p.mu };
       eInfo = decide(kind, vw, this.pol);
+      if (this.p.labJourney && eInfo.mode === 3 && !this.yieldedToPedestrian) {
+        this.yieldedToPedestrian = true;
+        this.marks.push({ t: t, k: "yield", title: "Xe ta nhường người đi bộ" });
+      }
+      eg.cmdSteer = Math.max(-0.5, Math.min(0.5, -0.05 * (eg.z - this.egoLaneZ) - 0.6 * eg.th));
+      if (md === "overtake") {
+        if (this.retreatActorIndex >= 0) this.avoidRetreatingPedestrian(sts, t, eInfo);
+      }
+      if (this.decisions) this.decisions[f] = {
+        action: eInfo.action || (["cruise", "follow", "caution", "yield", "red"][eInfo.mode]),
+        targetZ: eInfo.targetZ == null ? this.egoLaneZ : eInfo.targetZ,
+        lead: eInfo.lead
+      };
       acc[0] = eInfo.acc;
       if (this.opts.params && this.opts.params.egoProf && t < 2.0 - 1e-9) acc[0] = Math.max(this.aMin, Math.min(3.0, (profAt(this.opts.params.egoProf, t + DT) - eg.v) / DT));
-      eg.cmdSteer = Math.max(-0.5, Math.min(0.5, -0.05 * (eg.z - 1.75) - 0.6 * eg.th));
     } else if (md === "manual") {
       acc[0] = cmd ? Math.max(this.aMin, Math.min(3.0, cmd.acc)) : 0;
       var smax = Math.min(0.5, 4.0 / (eg.v + 2));
@@ -466,14 +927,49 @@
     var eb = this.opts.egoBrake;
     if (eb && md !== "log" && md !== "track" && t >= eb.t0 && t < eb.t0 + eb.dur) { acc[0] = Math.max(this.aMin, Math.min(acc[0], -eb.decel)); if (eg.v < 0.05) acc[0] = 0; }
     var ek = f * 4; this.EGO[ek] = eInfo.mode; this.EGO[ek + 1] = eInfo.pedVis; this.EGO[ek + 2] = eInfo.lead; this.EGO[ek + 3] = eg.steer || 0;
+  };
 
-    // ---------------- write the frame
+  /* Runtime: all services use one observation and simulation timestamp per tick.
+     cmd (manual ego only): { acc: m/s^2, steer: -1..1 } */
+  World.prototype.step = function (cmd) {
+    if (this.f >= this.nfMax) { this.done = true; return; }
+    var f = this.f, t = f * DT;
+    if (this.tk && f === this.tk) {   // take over from the log: start from exactly where the logged ego was
+      var q0 = this.logPose(this.opts.log, f, 0); this.ego = { x: q0.x, z: q0.z, th: Math.atan2(q0.hz, q0.hx), v: q0.v, steer: 0, a: q0.a };
+    }
+    if (this.rearPassIndex >= 0 && !this.replay) this.activateRearPass(t);
+    var sts = this.observe(), es = sts[0];
+    if (this.p.labJourney && !this.journeyFinished && es.x > ROAD.crossX + 12) {
+      this.journeyFinished = true;
+      this.marks.push({ t: t, k: "finish", title: "Xe ta đã qua giao lộ" });
+    }
+    var md = f < this.tk ? "log" : this.opts.ego, acc = new Array(this.N).fill(0);
+    this.egoAction(sts, acc, md, t, cmd);
+    this.updateTraffic(sts, acc, f, t);
+    this.writeFrame(sts, acc, f);
+    this.evaluateFrame(sts, f, t);
+    if (f < this.capacity - 1) {
+      this.advanceTraffic(acc);
+      this.advanceEgo(es, acc[0], md);
+    }
+    this.f++;
+    if (this.f >= this.nfMax) this.done = true;
+  };
+
+  // Rollout log, shared by playback, rendering and the evaluator.
+  World.prototype.writeFrame = function (sts, acc, f) {
+    var A = this.A, N = this.N;
     for (var i2 = 0; i2 < N; i2++) {
       var s2 = sts[i2], k2 = (f * N + i2) * 8;
       this.F[k2] = s2.x; this.F[k2 + 1] = s2.z; this.F[k2 + 2] = s2.hx; this.F[k2 + 3] = s2.hz; this.F[k2 + 4] = A[i2].v;
       this.F[k2 + 5] = this.replay && i2 > 0 ? s2.a : acc[i2]; this.F[k2 + 6] = this.replay && i2 > 0 ? s2.d : A[i2].d;
-      this.F[k2 + 7] = this.replay && i2 > 0 ? s2.flag : (A[i2].kind === "ped" ? (A[i2].v > 0 ? 1 : 0) : (acc[i2] < -1.5 ? 1 : 0));
+      this.F[k2 + 7] = this.replay && i2 > 0 ? s2.flag :
+        (A[i2].kind === "ped" ? (A[i2].v > 0 ? 1 : 0) : (acc[i2] < -1.5 ? 1 : 0) | (A[i2].rightIndicator ? 2 : 0));
     }
+  };
+
+  World.prototype.evaluateFrame = function (sts, f, t) {
+    var A = this.A, N = this.N, es = sts[0];
     // collisions: every pair that touches the ego, and vehicle-vehicle / vehicle-pedestrian pairs
     for (var u1 = 0; u1 < N; u1++) for (var u2 = u1 + 1; u2 < N; u2++) {
       var b1 = A[u1], b2 = A[u2]; if (b1.kind === "ped" && b2.kind === "ped") continue;
@@ -495,24 +991,39 @@
       this.off = { t: t, f: f }; this.events.push({ type: "off", t: t, f: f, a: "ego", b: "lề đường", x: es.x, z: es.z, ego: true });
     }
 
-    // ---------------- integrate to t + dt
-    if (f < NF - 1) {
-      for (var i3 = 1; i3 < N; i3++) {
-        if (this.replay) continue;
-        var a3 = A[i3]; if (a3.ctl === "walk") { a3.s += a3.v * DT; continue; }
-        a3.v = Math.max(0, a3.v + acc[i3] * DT); a3.s += a3.v * DT;
+  };
+
+  World.prototype.advanceTraffic = function (acc) {
+    if (this.replay) return;
+    for (var i = 1; i < this.N; i++) {
+      var actor = this.A[i];
+      if (actor.walkPath) {
+        var direction = actor.crossingPhase === "retreating" ? -1 : 1;
+        actor.s = Math.max(0, Math.min(actor.walkPath.len, actor.s + direction * actor.v * DT));
+        continue;
       }
-      if (md !== "log" && md !== "track") {
-        eg.a = (eg.v > 0 || acc[0] > 0) ? acc[0] : 0;
-        eg.v = Math.max(0, eg.v + eg.a * DT);
-        eg.steer = eg.cmdSteer || 0;
-        eg.th += eg.v / WB * Math.tan(eg.steer) * DT;
-        eg.x += eg.v * Math.cos(eg.th) * DT; eg.z += eg.v * Math.sin(eg.th) * DT;
-      } else { eg.v = es.v; }
-      this.vh.unshift(md === "log" || md === "track" ? es.v : eg.v); this.vh.pop();
+      if (actor.ctl !== "walk") actor.v = Math.max(0, actor.v + acc[i] * DT);
+      actor.s += actor.v * DT;
     }
-    this.f++;
-    if (this.f >= this.nfMax) this.done = true;
+  };
+
+  function advanceVehicle(ego, acceleration, steer) {
+    ego.a = (ego.v > 0 || acceleration > 0) ? acceleration : 0;
+    ego.v = Math.max(0, ego.v + ego.a * DT);
+    ego.steer = steer;
+    ego.th += ego.v / WB * Math.tan(ego.steer) * DT;
+    ego.x += ego.v * Math.cos(ego.th) * DT; ego.z += ego.v * Math.sin(ego.th) * DT;
+  }
+
+  // Local controller and vehicle model. Replay modes take their pose from the log.
+  World.prototype.advanceEgo = function (observedEgo, acceleration, mode) {
+    var ego = this.ego;
+    if (mode === "log" || mode === "track") {
+      ego.v = observedEgo.v;
+    } else {
+      advanceVehicle(ego, acceleration, ego.cmdSteer || 0);
+    }
+    this.vh.unshift(ego.v); this.vh.pop();
   };
   World.prototype.pedGateOK = function (a, i, sts, t) {
     var ps = sts[i], occl = this.occluder(sts);
@@ -565,11 +1076,100 @@
   };
   /* a finished run as a compact record (what the viewer plays and what replay reads) */
   World.prototype.record = function () {
-    return { N: this.N, F: this.F, EGO: this.EGO, LS: this.LS, events: this.events, marks: this.marks, nf: this.f, params: this.p, opts: this.opts,
+    return { N: this.N, F: this.F, EGO: this.EGO, LS: this.LS, events: this.events, marks: this.marks, decisions: this.decisions, nf: this.f, params: this.p, opts: this.opts,
              actors: this.A.map(function (a) { return { id: a.id, name: a.name, kind: a.kind, dims: a.dims, color: a.color, dark: !!a.dark, lane: a.lane }; }) };
   };
   function run(opts) { var w = new World(opts); while (!w.done) w.step(); return w.record(); }
-  /* the ego's poses from a record, padded to NF frames (standing still after the last recorded frame) */
+  /* Interpolate the actor pose between frames. Acceleration and flags come from the current step. */
+  function poseAt(R, i, t) {
+    var nf = R.nf || NF, x = Math.max(0, Math.min(nf - 1, t / DT)), f = Math.floor(x), u = x - f;
+    var N = R.N, F = R.F, a = (f * N + i) * 8, b = (Math.min(f + 1, nf - 1) * N + i) * 8;
+    var hx = F[a + 2] + (F[b + 2] - F[a + 2]) * u, hz = F[a + 3] + (F[b + 3] - F[a + 3]) * u, hl = Math.hypot(hx, hz) || 1;
+    return { x: F[a] + (F[b] - F[a]) * u, z: F[a + 1] + (F[b + 1] - F[a + 1]) * u, hx: hx / hl, hz: hz / hl, v: F[a + 4] + (F[b + 4] - F[a + 4]) * u, acc: F[a + 5], flag: F[a + 7], rightIndicator: !!(F[a + 7] & 2), f: f };
+  }
+
+  // Ground-truth pose input for a renderer bridge. Coordinates are local lab metres.
+  // Camera calibration, scene IDs and NVIDIA coordinate transforms belong to that bridge.
+  function rendererFrame(record, frame) {
+    if (!Number.isInteger(frame) || frame < 0 || frame >= record.nf) throw new RangeError("Frame outside rollout");
+    var actors = record.actors.map(function (actor, i) {
+      var k = (frame * record.N + i) * 8, F = record.F;
+      return { id: actor.id, x: F[k], z: F[k + 1], yawRad: Math.atan2(F[k + 3], F[k + 2]), speedMps: F[k + 4] };
+    });
+    return { timestampUs: Math.round(frame * DT * 1e6), ego: actors[0], actors: actors.slice(1) };
+  }
+
+  // The arrow describes the plan on the current view of the road. A vehicle may
+  // move out of the way in the prediction while still occupying that space now.
+  function clipGuide(points, record, t) {
+    var start = points[0], obstacles = [];
+    function addObstacle(pose, dims) {
+      if (Math.abs(pose.x - start.x) > 23 || Math.abs(pose.z - start.z) > 17) return;
+      var box = obb(pose, dims);
+      box.l += 1;
+      box.w += 1;
+      obstacles.push(box);
+    }
+    PARKED.forEach(function (pose) { addObstacle(pose, CAR); });
+    for (var i = 1; i < record.N; i++) addObstacle(poseAt(record, i, t), record.actors[i].dims);
+    var visible = [start], distance = 0;
+    for (var j = 1; j < points.length; j++) {
+      var from = points[j - 1], to = points[j];
+      distance += Math.hypot(to.x - from.x, to.z - from.z);
+      if (distance > 14 || Math.abs(to.z) > ROAD.half - .75 ||
+          obstacles.some(function (box) { return segHitsBox(from.x, from.z, to.x, to.z, box); })) break;
+      visible.push(to);
+    }
+    return visible;
+  }
+
+  // A planned path is recorded before applying the first command. The reference
+  // driver instead shows the actual replay path up to the next lane decision.
+  function guidanceAt(record, t, ego) {
+    if (!record.decisions) return null;
+    var frame = Math.min(record.nf - 1, Math.floor(t / DT + 1e-9));
+    var decision = record.decisions[frame];
+    if (!decision) return null;
+    ego = ego || poseAt(record, 0, t);
+    function nose(p) { return { x: p.x + p.hx * (CAR.len / 2 + .5), z: p.z + p.hz * (CAR.len / 2 + .5), hx: p.hx, hz: p.hz }; }
+    var points = [nose(ego)];
+    if (decision.path) {
+      decision.path.forEach(function (sample) { points.push(nose(sample)); });
+    } else {
+      var end = Math.min(frame + Math.round(1.8 / DT), record.nf - 1);
+      for (var i = frame + 1; i <= end; i++) {
+        if (!record.decisions[i] || record.decisions[i].targetZ !== decision.targetZ) { end = i; break; }
+      }
+      var endTime = end * DT;
+      for (var s = t + .15; s < endTime - 1e-6; s += .15) points.push(nose(poseAt(record, 0, s)));
+      if (endTime > t + 1e-6) points.push(nose(poseAt(record, 0, endTime)));
+    }
+    var predictedPoints = points.length;
+    points = clipGuide(points, record, t);
+    var first = points[0], tip = points[points.length - 1];
+    var length = Math.hypot(tip.x - first.x, tip.z - first.z);
+    var waiting = ["wait-pass", "yield", "red", "ped-wait", "plan-signal", "plan-yellow", "plan-intersection", "plan-caution", "plan-yield", "plan-emergency"].indexOf(decision.action) >= 0;
+    var stopped = length < .7 && ego.v < 1;
+    var braking = record.F[frame * record.N * 8 + 5] < -.5;
+    var color = waiting || braking || stopped ? "gold" : "plan";
+    var strip = [], head = [];
+    function offset(p, along, side) {
+      return [p.x + along * p.hx - side * p.hz, p.z + along * p.hz + side * p.hx];
+    }
+    if (length >= .7) {
+      var headLength = Math.min(1.35, length * .6);
+      var base = offset(tip, -headLength, 0);
+      while (points.length > 1 && Math.hypot(tip.x - points[points.length - 1].x, tip.z - points[points.length - 1].z) < headLength) points.pop();
+      points.push({ x: base[0], z: base[1], hx: tip.hx, hz: tip.hz });
+      points.forEach(function (p) { strip.push(offset(p, 0, -.23), offset(p, 0, .23)); });
+      head = [offset(tip, -headLength, -.7), offset(tip, 0, 0), offset(tip, -headLength, .7)];
+    } else if (stopped && predictedPoints === points.length) {
+      strip = [offset(first, 0, -.65), offset(first, 0, .65), offset(first, .25, -.65), offset(first, .25, .65)];
+    }
+    return { decision: decision, frame: frame, braking: braking, color: color, strip: strip, head: head };
+  }
+
+  /* The ego's poses from a record, padded to NF frames (standing still after the last recorded frame). */
   function egoTrack(R) {
     var T = new Float32Array(NF * 6), nf = R.nf || NF;
     for (var f = 0; f < NF; f++) {
@@ -643,7 +1243,7 @@
   // ------------------------------------------------------------------ closed-loop metrics
   function egoMetrics(R, log) {
     var N = R.N, F = R.F, hits = R.events.filter(function (e) { return e.type === "hit" && e.ego; }), red = R.events.filter(function (e) { return e.type === "red"; })[0];
-    var dev = new Float32Array(NF), ttcMin = 1e9, gapMin = 1e9, decMax = 0, tgGap = 1e9, TG = -1, LD = -1;
+    var dev = new Float32Array(Math.max(NF, R.nf || NF)), ttcMin = 1e9, gapMin = 1e9, decMax = 0, tgGap = 1e9, TG = -1, LD = -1;
     R.actors.forEach(function (a, i) { if (a.id === "TG") TG = i; });
     var nf = R.nf || NF;
     for (var f = 0; f < nf; f++) {
@@ -669,6 +1269,6 @@
 
   var api = { DT: DT, T_END: T_END, NF: NF, ROAD: ROAD, LANES: LANES, PARKED: PARKED, CAR: CAR, BUS: BUS, DEFAULTS: DEFAULTS, POLICY: POLICY, PLANNERS: PLANNERS,
               light: light, SIG: SIG, at: at, viewAt: viewAt, percept: percept, features: features, predictSpeeds: predictSpeeds, modelIO: modelIO, planAt: planAt, FEAT_NAMES: FEAT_NAMES, POLICY_IDM: null,
-              setModels: function (m) { MODELS = m; }, setLab: function (m) { LAB = m; }, hasLab: function () { return !!LAB; }, labPredict: function (kind, seed, x) { return labMlp(LAB[LABKEY[kind]][seed], x); }, hasModels: function () { return !!MODELS; }, World: World, run: run, egoTrack: egoTrack, openLoop: openLoop, egoMetrics: egoMetrics, overlap: overlap, obb: obb, segHitsBox: segHitsBox };
+              setModels: function (m) { MODELS = m; }, setLab: function (m) { LAB = m; }, hasLab: function () { return !!LAB; }, labPredict: function (kind, seed, x) { return labMlp(LAB[LABKEY[kind]][seed], x); }, hasModels: function () { return !!MODELS; }, World: World, run: run, poseAt: poseAt, rendererFrame: rendererFrame, guidanceAt: guidanceAt, egoTrack: egoTrack, openLoop: openLoop, egoMetrics: egoMetrics, overlap: overlap, obb: obb, segHitsBox: segHitsBox };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.ReplaySim = api;
 })(this);

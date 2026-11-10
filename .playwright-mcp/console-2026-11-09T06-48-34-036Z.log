@@ -1,0 +1,143 @@
+[    4888ms] TypeError: Cannot read properties of null (reading 'toLowerCase')
+    at https://www.nvidia.com/en-us/on-demand/session/gtc26-dlit82311/:2742:32
+[    5421ms] [LOG] Current Locale: en-us @ https://www.nvidia.com/content/dam/en-zz/Solutions/librarian/bundle-search-prod-pub-v3.1.js:10
+[    5464ms] [WARNING] GSAP target .mega-overlay not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[    5464ms] [WARNING] GSAP target .mega-menu not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[    5465ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[    5613ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[    5661ms] TypeError: Cannot read properties of null (reading 'style')
+    at b (https://www.nvidia.com/assets/nvod/nvod-login.js:1:81756)
+    at C (https://www.nvidia.com/assets/nvod/nvod-login.js:1:85438)
+    at https://www.nvidia.com/assets/nvod/nvod-login.js:1:85296
+[    6390ms] [LOG] load session @ https://www.nvidia.com/en-us/on-demand/session/gtc26-dlit82311/:2456
+[    6392ms] [LOG] NVIDIAGDC.web.q1gtc26-dlit82311 @ https://www.nvidia.com/en-us/on-demand/session/gtc26-dlit82311/:2551
+[    6869ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[    6884ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[    6888ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[    6992ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[    6993ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[    7601ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[    8019ms] [INFO] %c @playkit-js/kaltura-player-js 3.17.105 color: #ff98f9;  font-size: large @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[    8019ms] [INFO] %c For more details see https://github.com/kaltura/kaltura-player-js color: #ff98f9; @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[    8079ms] [LOG] [Error] Category:7 | Code:7003 | cast @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[    8345ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[    8455ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[    9985ms] [LOG] [Error] Category:7 | Code:7003 | cast @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[    9987ms] [LOG] [Error] Category:7 | Code:7003 | cast @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[   10702ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   10809ms] [WARNING] Triggering Page Refresh @ https://cdn.cookielaw.org/scripttemplates/202608.1.0/otBannerSdk.js:6
+[   11107ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   12288ms] TypeError: Cannot read properties of null (reading 'toLowerCase')
+    at https://www.nvidia.com/en-us/on-demand/session/gtc26-dlit82311/:2742:32
+[   12555ms] [LOG] Current Locale: en-us @ https://www.nvidia.com/content/dam/en-zz/Solutions/librarian/bundle-search-prod-pub-v3.1.js:10
+[   12622ms] [WARNING] GSAP target .mega-overlay not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   12622ms] [WARNING] GSAP target .mega-menu not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   12623ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   12745ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   12774ms] TypeError: Cannot read properties of null (reading 'style')
+    at b (https://www.nvidia.com/assets/nvod/nvod-login.js:1:81756)
+    at C (https://www.nvidia.com/assets/nvod/nvod-login.js:1:85438)
+    at https://www.nvidia.com/assets/nvod/nvod-login.js:1:85296
+[   13104ms] TypeError: Cannot set properties of undefined (setting 'href')
+    at checkElementXt (<anonymous>:9:20)
+[   14360ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://ib.adnxs.com/getuid?https%3a%2f%2fmatch.adsrvr.org%2ftrack%2fcmf%2fappnexus%3fttd%3d1%26anid%3d%24UID&ttd_tdid=a6a774e9-0935-4b0a-babd-0d466649cead:0
+[   14608ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://epsilon.6sense.com/v3/company/details:0
+[   14611ms] [LOG] load session @ https://www.nvidia.com/en-us/on-demand/session/gtc26-dlit82311/:2456
+[   14611ms] [LOG] NVIDIAGDC.web.q1gtc26-dlit82311 @ https://www.nvidia.com/en-us/on-demand/session/gtc26-dlit82311/:2551
+[   15997ms] [WARNING] [Meta Pixel] - Duplicate Pixel ID: 161755414605325. @ https://connect.facebook.net/en_US/fbevents.js:205
+[   18093ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   18282ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   18282ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   18445ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   18598ms] [INFO] %c @playkit-js/kaltura-player-js 3.17.105 color: #ff98f9;  font-size: large @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[   18599ms] [INFO] %c For more details see https://github.com/kaltura/kaltura-player-js color: #ff98f9; @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[   18637ms] [LOG] [Error] Category:7 | Code:7003 | cast @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[   18774ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   19067ms] [LOG] [Error] Category:7 | Code:7003 | cast @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[   19070ms] [LOG] [Error] Category:7 | Code:7003 | cast @ https://cdnapi-ev.kaltura.com/p/2935771/embedPlaykitJs/uiconf_id/50468382:10
+[   19767ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   20450ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   20932ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   21110ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   24523ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   26643ms] [WARNING] GSAP target svg.menu-button.caret-left not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   26645ms] [WARNING] GSAP target svg.menu-button.caret-left not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   26645ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   26645ms] [WARNING] GSAP target span.main-menu-buttons-desktop not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   26645ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   26646ms] [WARNING] GSAP target label.menu-level-1 not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   27653ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   28903ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   29903ms] [WARNING] GSAP target svg.menu-button.caret-left not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   29903ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   29903ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   29919ms] [WARNING] GSAP target  not found. https://greensock.com @ https://www.nvidia.com/etc.clientlibs/nvidiaweb/clientlibs/clientlib-webfoundation.min.ea96efb4e69f69a879ae4590677217bc.js:988
+[   32791ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   34384ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   36047ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   36443ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   39814ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   40832ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   43002ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   46569ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   71150ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   76549ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   80554ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   83416ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   86788ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[   91559ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  125769ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  129139ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  129869ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  131136ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  140124ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  140656ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  148552ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  151308ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  154415ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  158515ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  161322ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  248208ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  252558ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  260093ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  263204ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  292886ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  296305ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  432401ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  435274ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  437408ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  448309ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  451029ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  605847ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  610976ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  628362ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  631496ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  652087ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  655532ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  705695ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  719188ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  793868ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  799677ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  802809ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  829111ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  830207ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[  832942ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1301174ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1303451ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1304770ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1305560ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1306009ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1306148ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1306517ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1306782ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1309640ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1310098ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1365957ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1367680ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1370017ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1547660ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1550852ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1553194ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1763780ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 1768640ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1
+[ 2698269ms] [LOG] React function(e,t){return x.H.useEffect(e,t)} @ https://api-prod.nvidia.com/search/nvidia-search-library.js:1

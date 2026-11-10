@@ -1,330 +1,59 @@
-/* app.js — "Phòng phát lại · Bài lab Day 12": three.js street scene (ReplaySim) in which the models of the Day 12 lab drive.
+/* app.js — controls and playback for the Day 12 closed-loop simulator.
    One panel only: pick a planner, a training seed and a scene (lead car brakes, the lab's cut-in, or a real Argoverse log),
    see all five planners side by side, the gap over time, and the release gate of the lab. Models and data come from
    lab_models.js / lab_data.js (scripts/export_viz.py). */
 (function () {
   "use strict";
-  var S = window.ReplaySim, T = window.THREE;
-  if (!S || !T) { document.getElementById("body").innerHTML = "<p>Không tải được thư viện 3D. Mở lại trang khi có mạng.</p>"; return; }
-  var DT = S.DT, T_END = S.T_END, NF = S.NF, ROAD = S.ROAD, CX = ROAD.crossX, SIG = S.SIG;
+  var S = window.ReplaySim, pose = S.poseAt;
+  var DT = S.DT, NF = S.NF;
   var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var $ = function (id) { return document.getElementById(id); };
-  function rng(seed) { var a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-  function hash(a, b, c) { var h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(c | 0, 2246822519); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
   function fmt(x, d) { return (+x).toFixed(d == null ? 1 : d).replace(".", ","); }
   function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
-  function ease(u) { u = clamp(u, 0, 1); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
   // ================================================================== palette (CSS tokens -> three colours and canvas strings)
   var KEYS = ["sc-bg", "sc-ground", "sc-road", "sc-mark", "sc-walk", "sc-yel", "sc-bldg", "sc-bldg2", "sc-edge", "sc-glass", "sc-tree", "sc-trunk", "sc-sky",
     "sc-gnd-light", "sc-cab", "sc-wheel", "sc-off", "car-1", "car-2", "car-3", "car-4", "car-dark", "bus", "ego", "adv", "ped", "scan", "scan-live", "plan",
     "blue", "teal", "purple", "gold", "green", "grey", "hit", "amber", "ink", "ink-2", "ink-3", "line", "chip", "panel-solid"];
-  var PAL = {}, CSS = {}, MATS = {}, onTheme = [];
-  function readPal() { var cs = getComputedStyle(document.documentElement); KEYS.forEach(function (k) { var v = cs.getPropertyValue("--" + k).trim() || "#888"; CSS[k] = v; PAL[k] = new T.Color(v); }); }
-  function isDark() { return PAL["sc-bg"].getHSL({}).l < .3; }
-  function mat(key, opts, Type) { var m = new (Type || T.MeshLambertMaterial)(Object.assign({}, opts || {})); (MATS[key] = MATS[key] || []).push(m); if (PAL[key]) m.color.copy(PAL[key]); return m; }
-  function applyPal() { readPal(); Object.keys(MATS).forEach(function (k) { MATS[k].forEach(function (m) { m.color.copy(PAL[k]); }); }); onTheme.forEach(function (f) { f(); }); plotDirty = true; }
+  var CSS = {};
+  function readPal() {
+    var cs = getComputedStyle(document.documentElement);
+    KEYS.forEach(function (key) { CSS[key] = cs.getPropertyValue("--" + key).trim() || "#888"; });
+  }
+  function applyPal() {
+    readPal();
+    view.applyPalette(st.t);
+    plotDirty = true;
+  }
   readPal();
 
-  // ================================================================== renderer, scene, lights
-  var stage = $("stage"), labelsEl = $("labels");
-  var renderer = new T.WebGLRenderer({ antialias: true });
-  var PR = Math.min(window.devicePixelRatio || 1, 1.5), slowAcc = 0;
-  renderer.setPixelRatio(PR);
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
-  stage.insertBefore(renderer.domElement, labelsEl);
-  var scene = new T.Scene(); scene.background = new T.Color(); scene.fog = new T.Fog(0xffffff, 150, 560);
-  var camera = new T.PerspectiveCamera(38, 1, 0.3, 2500);
-  var hemi = new T.HemisphereLight(0xffffff, 0x888888, 0.75); scene.add(hemi);
-  var sun = new T.DirectionalLight(0xffffff, 0.75); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048); var shc = sun.shadow.camera; shc.left = -70; shc.right = 70; shc.top = 70; shc.bottom = -70; shc.near = 10; shc.far = 400;
-  sun.shadow.bias = -0.0008; scene.add(sun); scene.add(sun.target);
-  function applyEnv() {
-    var dark = isDark();
-    scene.background.copy(PAL["sc-bg"]); scene.fog.color.copy(PAL["sc-bg"]); renderer.setClearColor(PAL["sc-bg"]);
-    hemi.color.copy(PAL["sc-sky"]); hemi.groundColor.copy(PAL["sc-gnd-light"]); hemi.intensity = dark ? 0.62 : 0.52;
-    sun.color.set(0xffffff); sun.intensity = dark ? 0.55 : 0.6;
-  }
-  onTheme.push(applyEnv);
-
-  // ================================================================== camera rig: orbit around the ego, chase behind it, or free; one target per split view
-  var rig = { tx: 0, tz: 2, dist: 70, yaw: 3.3, pitch: 0.62, mode: "follow", lead: 8 }, tween = null;
-  var VT = [{ x: 0, z: 0, snap: true }, { x: 0, z: 0, snap: true }];
-  function camTo(p, dur) {
-    var from = { dist: rig.dist, yaw: rig.yaw, pitch: rig.pitch, lead: rig.lead }, to = Object.assign({}, from, p);
-    var dy = to.yaw - from.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); to.yaw = from.yaw + dy;
-    tween = { from: from, to: to, t0: performance.now(), dur: REDUCED ? 1 : (dur || 1400) };
-  }
-  function stepTween() {
-    if (!tween) return;
-    var u = ease((performance.now() - tween.t0) / tween.dur);
-    ["dist", "yaw", "pitch", "lead"].forEach(function (k) { rig[k] = tween.from[k] + (tween.to[k] - tween.from[k]) * u; });
-    if (u >= 1) tween = null;
-  }
-  function placeCamera(dtReal, ego, vi) {
-    var V = VT[vi];
-    if (rig.mode === "free") { V.x = rig.tx; V.z = rig.tz; }
-    else if (ego) {
-      var gx = ego.x + ego.hx * rig.lead, gz = ego.z + ego.hz * rig.lead, k = V.snap ? 1 : 1 - Math.exp(-dtReal * 6);
-      V.x += (gx - V.x) * k; V.z += (gz - V.z) * k; V.snap = false;
-      if (rig.mode === "chase" && vi === 0 && !tween) { var want = Math.atan2(-ego.hz, -ego.hx), d = Math.atan2(Math.sin(want - rig.yaw), Math.cos(want - rig.yaw)); rig.yaw += d * (1 - Math.exp(-dtReal * 3)); }
-    }
-    var cp = Math.cos(rig.pitch);
-    camera.position.set(V.x + rig.dist * cp * Math.cos(rig.yaw), rig.dist * Math.sin(rig.pitch), V.z + rig.dist * cp * Math.sin(rig.yaw));
-    camera.lookAt(V.x, 1, V.z);
-  }
-  function setCam(m) {
-    if (m === "free") { rig.tx = VT[0].x; rig.tz = VT[0].z; }
-    rig.mode = m; var b = $("camBtn"); b.textContent = m === "follow" ? "theo xe" : m === "chase" ? "sau xe" : "tự do";
-    if (m === "chase") camTo({ dist: 20, pitch: 0.3, lead: 6 }, 900);
-  }
-  (function pointer() {
-    var el = renderer.domElement, ptrs = {}, last = null, pinch = 0;
-    el.addEventListener("pointerdown", function (e) { ptrs[e.pointerId] = [e.clientX, e.clientY]; el.setPointerCapture(e.pointerId); last = [e.clientX, e.clientY]; tween = null; });
-    el.addEventListener("pointermove", function (e) {
-      if (!ptrs[e.pointerId]) return;
-      var ids = Object.keys(ptrs);
-      if (ids.length === 2) {
-        ptrs[e.pointerId] = [e.clientX, e.clientY];
-        var a = ptrs[ids[0]], b = ptrs[ids[1]], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-        if (pinch) rig.dist = clamp(rig.dist * pinch / d, 6, 420); pinch = d; return;
-      }
-      var dx = e.clientX - last[0], dy = e.clientY - last[1]; last = [e.clientX, e.clientY]; ptrs[e.pointerId] = last;
-      if (e.shiftKey || e.buttons === 2) {
-        if (rig.mode !== "free") setCam("free");
-        var s = rig.dist * 0.0016, cy = Math.cos(rig.yaw), sy = Math.sin(rig.yaw);
-        rig.tx += (sy * dx + cy * dy) * s; rig.tz += (-cy * dx + sy * dy) * s;
-      } else { if (rig.mode === "chase") setCam("follow"); rig.yaw += dx * 0.006; rig.pitch = clamp(rig.pitch + dy * 0.004, 0.06, 1.48); }
-    });
-    function up(e) { delete ptrs[e.pointerId]; pinch = 0; }
-    el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
-    el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-    el.addEventListener("wheel", function (e) { e.preventDefault(); tween = null; rig.dist = clamp(rig.dist * Math.exp(e.deltaY * 0.0012), 6, 420); }, { passive: false });
-  })();
-
-  // ================================================================== static world
-  var BOX = new T.BoxGeometry(1, 1, 1), PLANE = new T.PlaneGeometry(1, 1); PLANE.rotateX(-Math.PI / 2);
-  var world = new T.Group(); scene.add(world);
-  var XA = -220, XB = 660;
-  var ground = new T.Mesh(new T.PlaneGeometry(1800, 1200).rotateX(-Math.PI / 2), mat("sc-ground")); ground.receiveShadow = true; ground.position.x = 220; world.add(ground);
-  var roadMat = mat("sc-road"), walkMat = mat("sc-walk");
-  function flat(x0, x1, z0, z1, y, m) { var o = new T.Mesh(PLANE, m); o.scale.set(x1 - x0, 1, z1 - z0); o.position.set((x0 + x1) / 2, y, (z0 + z1) / 2); o.receiveShadow = true; world.add(o); return o; }
-  function walkBox(x0, x1, z0, z1) { var o = new T.Mesh(BOX, walkMat); o.scale.set(x1 - x0, 0.16, z1 - z0); o.position.set((x0 + x1) / 2, 0.08, (z0 + z1) / 2); o.receiveShadow = true; world.add(o); }
-  flat(XA, XB, -ROAD.half, ROAD.half, 0.02, roadMat);
-  flat(CX - 7, CX + 7, -320, 320, 0.021, roadMat);
-  [[XA, CX - 10.5], [CX + 10.5, XB]].forEach(function (r) { walkBox(r[0], r[1], 7, 10.8); walkBox(r[0], r[1], -10.8, -7); });
-  [[-320, -7], [7, 320]].forEach(function (r) { walkBox(CX - 10.5, CX - 7, r[0], r[1]); walkBox(CX + 7, CX + 10.5, r[0], r[1]); });
-  var marks = [], ymarks = [];
-  function dashes(x0, x1, z, len, gap, w, skip, out) { for (var x = x0; x < x1; x += len + gap) { if (skip && x + len > skip[0] && x < skip[1]) continue; (out || marks).push([x + len / 2, z, len, w]); } }
-  var skipX = [CX - 9.5, CX + 9.5];
-  dashes(XA, XB, 3.5, 3, 6, 0.15, skipX); dashes(XA, XB, -3.5, 3, 6, 0.15, skipX);
-  dashes(XA, XB, 6.8, 9, 0.001, 0.16, skipX); dashes(XA, XB, -6.8, 9, 0.001, 0.16, skipX);
-  dashes(XA, XB, 0.12, 9, 0.001, 0.12, skipX, ymarks); dashes(XA, XB, -0.12, 9, 0.001, 0.12, skipX, ymarks);
-  for (var zz = -6.5; zz <= 6.6; zz += 1.0) marks.push([ROAD.walkX, zz, 3, 0.5]);                 // zebra
-  marks.push([ROAD.stopE + 0.2, 3.5, 0.35, 7]); marks.push([ROAD.stopW - 0.2, -3.5, 0.35, 7]);    // stop lines on the main road
-  marks.push([CX + 3.5, ROAD.stopN + 0.2, 7, 0.35]); marks.push([CX - 3.5, -ROAD.stopN - 0.2, 7, 0.35]);
-  [[-320, -9], [9, 320]].forEach(function (r) { for (var z = r[0]; z < r[1]; z += 9) ymarks.push([CX, z + 1.5, 0.12, 3]); });
-  // bus bay box
-  [[ROAD.busX - 9, 6.95, 18, 0.12], [ROAD.busX - 9, 3.6, 18, 0.12]].forEach(function (b) { marks.push([b[0] + b[2] / 2, b[1], b[2], b[3]]); });
-  function instStrips(list, m) {
-    var im = new T.InstancedMesh(PLANE, m, list.length), o = new T.Object3D();
-    list.forEach(function (d, i) { o.position.set(d[0], 0.035, d[1]); o.scale.set(d[2], 1, d[3]); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
-    im.receiveShadow = true; world.add(im); return im;
-  }
-  instStrips(marks, mat("sc-mark", {}, T.MeshBasicMaterial));
-  instStrips(ymarks, mat("sc-yel", {}, T.MeshBasicMaterial));
-  // the words "BUS" are left to the reader; a yellow kerb marks the stop
-  flat(ROAD.busX - 9, ROAD.busX + 9, 7.0, 7.3, 0.17, mat("sc-yel", {}, T.MeshBasicMaterial));
-
-  // buildings: deterministic blocks; they are LiDAR targets and appear in the scanned map
-  var BLD = [];
-  (function genBuildings() {
-    var r = rng(23);
-    [1, -1].forEach(function (side) {
-      var x = XA + 10;
-      while (x < XB - 10) {
-        var w = 10 + r() * 22;
-        if (x + w > CX - 14 && x < CX + 14) { x = CX + 14 + r() * 3; continue; }
-        var depth = 12 + r() * 22, h = 6 + Math.pow(r(), 1.7) * 26, z0 = side > 0 ? 13 + r() * 3 : -13 - r() * 3 - depth;
-        BLD.push({ x0: x, x1: x + w - 1.8, z0: z0, z1: z0 + depth, h: h, glass: r() < 0.2, tone: r() < 0.5 });
-        x += w;
-      }
-    });
-    [-42, -74, 44, 76, 108, -106].forEach(function (zc, i) {
-      BLD.push({ x0: CX - 32, x1: CX - 13, z0: zc - 13, z1: zc + 13, h: 9 + 7 * (i % 2), glass: i === 1, tone: true });
-      BLD.push({ x0: CX + 13, x1: CX + 33, z0: zc - 13, z1: zc + 13, h: 11 + 6 * (i % 3), glass: false, tone: false });
-    });
-  })();
-  var bldMat = new T.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 1 });
-  var bldMesh = new T.InstancedMesh(BOX, bldMat, BLD.length); bldMesh.castShadow = true; bldMesh.receiveShadow = true; world.add(bldMesh);
-  (function () { var o = new T.Object3D(); BLD.forEach(function (b, i) { o.position.set((b.x0 + b.x1) / 2, b.h / 2, (b.z0 + b.z1) / 2); o.scale.set(b.x1 - b.x0, b.h, b.z1 - b.z0); o.updateMatrix(); bldMesh.setMatrixAt(i, o.matrix); }); })();
-  function colorBuildings() { BLD.forEach(function (b, i) { bldMesh.setColorAt(i, b.glass ? PAL["sc-glass"] : b.tone ? PAL["sc-bldg"] : PAL["sc-bldg2"]); }); if (bldMesh.instanceColor) bldMesh.instanceColor.needsUpdate = true; }
-  colorBuildings(); onTheme.push(colorBuildings);
-  var edgeMat = mat("sc-edge", { transparent: true, opacity: 0.85 }, T.LineBasicMaterial), bldEdges;
-  (function edges() {
-    var p = [];
-    BLD.forEach(function (b) {
-      var X = [b.x0, b.x1], Z = [b.z0, b.z1], Y = [0, b.h];
-      function L(a, c) { p.push(a[0], a[1], a[2], c[0], c[1], c[2]); }
-      for (var i = 0; i < 2; i++) for (var j = 0; j < 2; j++) L([X[i], 0, Z[j]], [X[i], b.h, Z[j]]);
-      Y.forEach(function (y) { L([X[0], y, Z[0]], [X[1], y, Z[0]]); L([X[0], y, Z[1]], [X[1], y, Z[1]]); L([X[0], y, Z[0]], [X[0], y, Z[1]]); L([X[1], y, Z[0]], [X[1], y, Z[1]]); });
-      if (b.glass) for (var y = 3.5; y < b.h; y += 3.5) { L([X[0], y, Z[0]], [X[1], y, Z[0]]); L([X[0], y, Z[1]], [X[1], y, Z[1]]); }
-    });
-    var g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(p, 3));
-    bldEdges = new T.LineSegments(g, edgeMat); world.add(bldEdges);
-  })();
-  var TREES = [];
-  [9.8, -9.8].forEach(function (z) { for (var x = XA + 5; x < XB; x += 14) {
-    if (Math.abs(x - CX) < 16 || Math.abs(x - ROAD.walkX) < 7 || (z > 0 && x > ROAD.busX - 12 && x < ROAD.busX + 12)) continue; TREES.push([x + (z > 0 ? 5 : 0), z]); } });
-  var crown = new T.InstancedMesh(new T.IcosahedronGeometry(1.7, 0), mat("sc-tree"), TREES.length);
-  var trunk = new T.InstancedMesh(new T.CylinderGeometry(0.16, 0.2, 2.6, 6), mat("sc-trunk"), TREES.length);
-  (function () { var o = new T.Object3D(), r = rng(5); TREES.forEach(function (t, i) { var s = 0.8 + r() * 0.5; o.position.set(t[0], 3.4 * s + 0.4, t[1]); o.scale.set(s, s * 1.15, s); o.rotation.y = r() * 6; o.updateMatrix(); crown.setMatrixAt(i, o.matrix); o.position.set(t[0], 1.3, t[1]); o.scale.set(1, 1, 1); o.updateMatrix(); trunk.setMatrixAt(i, o.matrix); }); })();
-  crown.castShadow = trunk.castShadow = true; world.add(crown); world.add(trunk);
-  (function shelter() { var m = mat("sc-edge"), g = new T.Group(); [[ROAD.busX - 4, 10.1], [ROAD.busX + 4, 10.1]].forEach(function (p) { var post = new T.Mesh(BOX, m); post.scale.set(0.12, 2.6, 0.12); post.position.set(p[0], 1.3, p[1]); g.add(post); });
-    var roof = new T.Mesh(BOX, mat("sc-bldg2")); roof.scale.set(9, 0.15, 1.8); roof.position.set(ROAD.busX, 2.65, 9.8); roof.castShadow = true; g.add(roof);
-    var sign = new T.Mesh(BOX, mat("sc-yel")); sign.scale.set(0.5, 0.5, 0.08); sign.position.set(ROAD.busX - 6, 2.6, 8.0); g.add(sign);
-    var sp = new T.Mesh(BOX, m); sp.scale.set(0.08, 2.4, 0.08); sp.position.set(ROAD.busX - 6, 1.2, 8.0); g.add(sp); world.add(g); })();
-
-  // traffic lights: one pole per approach, three lamps that follow the signal plan
-  var TL = [];
-  (function lights() {
-    var poleMat = mat("sc-cab"), defs = [
-      { sig: "main", x: CX - 9.6, z: 8.4, face: [-1, 0] }, { sig: "main", x: CX + 9.6, z: -8.4, face: [1, 0] },
-      { sig: "cross", x: CX + 8.4, z: 9.6, face: [0, 1] }, { sig: "cross", x: CX - 8.4, z: -9.6, face: [0, -1] }];
-    var lampG = new T.SphereGeometry(0.15, 12, 8);
-    defs.forEach(function (d) {
-      var g = new T.Group(), pole = new T.Mesh(new T.CylinderGeometry(0.09, 0.11, 4.6, 8), poleMat); pole.position.y = 2.3; g.add(pole);
-      var head = new T.Mesh(BOX, poleMat); head.scale.set(0.42, 1.25, 0.42); head.position.y = 4.9; g.add(head);
-      var lamps = {};
-      [["R", 5.3], ["Y", 4.9], ["G", 4.5]].forEach(function (l) {
-        var m = new T.MeshBasicMaterial({ color: 0x333333 }), s = new T.Mesh(lampG, m);
-        s.position.set(d.face[0] * 0.22, l[1], d.face[1] * 0.22); g.add(s); lamps[l[0]] = m;
-      });
-      g.position.set(d.x, 0, d.z); g.traverse(function (o) { if (o.isMesh) o.castShadow = true; }); world.add(g);
-      TL.push({ sig: d.sig, lamps: lamps, state: null });
-    });
-  })();
-  function paintLights(t, force) {
-    TL.forEach(function (L) {
-      var s = S.light(L.sig, t); if (s === L.state && !force) return; L.state = s;
-      L.lamps.R.color.copy(s === "R" ? PAL.ego : PAL["sc-off"]); L.lamps.Y.color.copy(s === "Y" ? PAL.amber : PAL["sc-off"]); L.lamps.G.color.copy(s === "G" ? PAL.green : PAL["sc-off"]);
-    });
-  }
-  onTheme.push(function () { paintLights(st.t, true); });
-
-  // ================================================================== actor meshes
-  var WHEEL = new T.CylinderGeometry(0.34, 0.34, 0.26, 14); WHEEL.rotateX(Math.PI / 2);
-  var colorKey = { ego: "ego", c1: "car-1", c2: "car-2", c3: "car-3", c4: "car-4", adv: "adv", bus: "bus", ped: "ped" };
-  function carMesh(key, kind) {
-    var g = new T.Group(), body, cab, L = kind === "bus" ? 12 : 4.5, W = kind === "bus" ? 2.5 : 1.86;
-    if (kind === "bus") {
-      body = new T.Mesh(BOX, mat(key)); body.scale.set(L, 2.5, W); body.position.y = 1.65; g.add(body);
-      cab = new T.Mesh(BOX, mat("sc-cab")); cab.scale.set(L - 1.2, 0.8, W + 0.02); cab.position.set(0.2, 2.15, 0); g.add(cab);
-    } else {
-      body = new T.Mesh(BOX, mat(key)); body.scale.set(L, 0.72, W); body.position.y = 0.66; g.add(body);
-      cab = new T.Mesh(BOX, mat("sc-cab")); cab.scale.set(2.3, 0.6, W - 0.2); cab.position.set(-0.3, 1.32, 0); g.add(cab);
-      var top = new T.Mesh(BOX, mat(key)); top.scale.set(2.0, 0.08, W - 0.26); top.position.set(-0.35, 1.66, 0); g.add(top);
-    }
-    var wx = kind === "bus" ? [4.2, -3.8] : [1.45, -1.45], wz = W / 2 - 0.12;
-    wx.forEach(function (x) { [-1, 1].forEach(function (s) { var w = new T.Mesh(WHEEL, mat("sc-wheel")); w.position.set(x, 0.34, s * wz); w.userData.noShadow = true; g.add(w); }); });
-    var blM = new T.MeshBasicMaterial({ color: 0x40191a });
-    [-1, 1].forEach(function (s) { var bl = new T.Mesh(BOX, blM); bl.scale.set(0.08, kind === "bus" ? 0.3 : 0.16, 0.4); bl.position.set(-L / 2 - 0.03, kind === "bus" ? 1.0 : 0.8, s * (W / 2 - 0.32)); bl.userData.noShadow = true; g.add(bl); });
-    g.userData.brake = blM;
-    if (key === "ego") {
-      var puck = new T.Mesh(new T.CylinderGeometry(0.32, 0.36, 0.3, 20), mat("sc-cab")); puck.position.set(-0.25, 1.86, 0); g.add(puck);
-      var ring = new T.Mesh(new T.TorusGeometry(0.34, 0.035, 6, 24).rotateX(Math.PI / 2), mat("scan-live", {}, T.MeshBasicMaterial)); ring.position.set(-0.25, 1.9, 0); g.add(ring);
-    }
-    g.traverse(function (o) { if (o.isMesh) o.castShadow = !o.userData.noShadow; });
-    return g;
-  }
-  function motoMesh(key) {
-    var g = new T.Group();
-    var b = new T.Mesh(BOX, mat(key)); b.scale.set(1.7, 0.5, 0.45); b.position.y = 0.55; g.add(b);
-    [0.65, -0.65].forEach(function (x) { var w = new T.Mesh(new T.CylinderGeometry(0.3, 0.3, 0.12, 12).rotateX(Math.PI / 2), mat("sc-wheel")); w.position.set(x, 0.3, 0); g.add(w); });
-    var r = new T.Mesh(new T.CylinderGeometry(0.18, 0.22, 0.75, 8), mat("sc-cab")); r.position.set(-0.15, 1.15, 0); g.add(r);
-    var h = new T.Mesh(new T.SphereGeometry(0.2, 10, 8), mat("gold")); h.position.set(-0.1, 1.68, 0); g.add(h);
-    g.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
-    return g;
-  }
-  function pedMesh() {
-    var g = new T.Group(), m = mat("ped");
-    var b = new T.Mesh(new T.CylinderGeometry(0.2, 0.24, 1.05, 10), m); b.position.y = 0.95; g.add(b);
-    var h = new T.Mesh(new T.SphereGeometry(0.17, 12, 10), m); h.position.y = 1.62; g.add(h);
-    var l1 = new T.Mesh(BOX, mat("sc-cab")); l1.scale.set(0.14, 0.5, 0.14); l1.position.set(0, 0.25, 0.1); g.add(l1);
-    var l2 = l1.clone(); l2.position.z = -0.1; g.add(l2); g.userData.legs = [l1, l2];
-    g.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
-    return g;
-  }
-  function meshFor(a) { return a.kind === "ped" ? pedMesh() : a.kind === "moto" ? motoMesh(colorKey[a.color]) : carMesh(a.kind === "ego" ? "ego" : a.dark ? "car-dark" : colorKey[a.color], a.kind); }
-  function ghostify(o, opacity) { o.traverse(function (m) { if (m.isMesh) { m.material = m.material.clone(); m.material.transparent = true; m.material.opacity = opacity; m.material.depthWrite = false; m.castShadow = false; } }); return o; }
-
-  // ================================================================== the recorded drive and the runs derived from it
+  var stage = $("stage");
   var LOG = S.run({ ego: "human", others: "reactive" });          // the drive we "recorded" on the street
-  var ACT = LOG.actors, NA = ACT.length, IDX = {}; ACT.forEach(function (a, i) { IDX[a.id] = i; });
-  var actorObj = ACT.map(function (a) { var o = meshFor(a); scene.add(o); return o; });
-  S.PARKED.forEach(function (p) { var o = carMesh(p.dark ? "car-dark" : colorKey[p.color], "car"); o.position.set(p.x, 0, p.z); o.rotation.y = Math.atan2(-p.hz, p.hx); scene.add(o); });
+  var ACT = LOG.actors, IDX = {}; ACT.forEach(function (a, i) { IDX[a.id] = i; });
+  var wants3D = new URLSearchParams(location.search).get("view") === "3d", view;
+  if (wants3D && window.THREE) {
+    try {
+      view = window.createStreetView(stage, ACT, IDX, CSS, REDUCED);
+    } catch (error) {
+      console.warn("Không khởi tạo được góc nhìn 3D.", error);
+    }
+  }
+  if (view) {
+    $("app").classList.add("view-3d");
+    stage.setAttribute("aria-label", "Mô phỏng 3D. Kéo để xoay, cuộn để phóng to.");
+    $("viewSwitch").href = location.pathname;
+    $("viewSwitch").textContent = "Trở về góc nhìn 2D BEV";
+  } else {
+    view = window.createBevView(stage, CSS);
+    if (wants3D) $("viewSwitch").textContent = "Thử tải lại góc nhìn 3D";
+  }
   var CACHE = {};
   function cached(key, fn) { if (!CACHE[key]) CACHE[key] = fn(); return CACHE[key]; }
-  function pose(R, i, t) {
-    var nf = R.nf || NF, x = t / DT, f = Math.min(Math.max(0, nf - 2), Math.max(0, Math.floor(x))), u = nf < 2 ? 0 : clamp(x - f, 0, 1), N = R.N, F = R.F;
-    var a = (f * N + i) * 8, b = (Math.max(0, Math.min(f + 1, nf - 1)) * N + i) * 8;
-    var hx = F[a + 2] + (F[b + 2] - F[a + 2]) * u, hz = F[a + 3] + (F[b + 3] - F[a + 3]) * u, hl = Math.hypot(hx, hz) || 1;
-    return { x: F[a] + (F[b] - F[a]) * u, z: F[a + 1] + (F[b + 1] - F[a + 1]) * u, hx: hx / hl, hz: hz / hl, v: F[a + 4] + (F[b + 4] - F[a + 4]) * u, acc: F[a + 5], flag: F[a + 7], f: f };
-  }
-  function place(o, a, p, t) {
-    o.position.set(p.x, 0, p.z); o.rotation.y = Math.atan2(-p.hz, p.hx);
-    if (o.userData.brake) { var on = p.acc < -1.2; if (o.userData.bOn !== on) { o.userData.brake.color.setHex(on ? 0xff2a1f : 0x40191a); o.userData.bOn = on; } }
-    if (a.kind === "ped" && o.userData.legs) { var sw = p.v > 0.05 ? Math.sin(t * 9 + a.id.length) * 0.35 : 0; o.userData.legs[0].rotation.z = sw; o.userData.legs[1].rotation.z = -sw; }
-  }
-
-  // ================================================================== trails (tracks), plan ribbon, hit rings
-  function makeTrail(key, opacity, dashed) {
-    var g = new T.BufferGeometry(); g.setAttribute("position", new T.BufferAttribute(new Float32Array(NF * 3), 3)); g.setDrawRange(0, 0);
-    var m = dashed ? mat(key, { dashSize: 1.2, gapSize: 0.9, transparent: true, opacity: opacity }, T.LineDashedMaterial) : mat(key, { transparent: true, opacity: opacity }, T.LineBasicMaterial);
-    var l = new T.Line(g, m); l.frustumCulled = false; l.visible = false; scene.add(l); return { line: l, R: null, n: 0, dashed: dashed };
-  }
-  function fillTrail(tr, R, i, y) {
-    var a = tr.line.geometry.attributes.position.array, nf = R.nf || NF;
-    for (var f = 0; f < NF; f++) { var g = Math.min(f, nf - 1), k = (g * R.N + i) * 8; a[f * 3] = R.F[k]; a[f * 3 + 1] = y; a[f * 3 + 2] = R.F[k + 1]; }
-    tr.line.geometry.attributes.position.needsUpdate = true; if (tr.dashed) tr.line.computeLineDistances();
-    tr.R = R; tr.nfFilled = nf;
-  }
-  function showTrail(tr, R, i, y, t) {
-    if (!R) { tr.line.visible = false; return; }
-    if (tr.R !== R || tr.nfFilled !== (R.nf || NF)) fillTrail(tr, R, i, y);
-    tr.line.geometry.setDrawRange(0, Math.max(0, Math.min(R.nf || NF, Math.floor(t / DT) + 1))); tr.line.visible = true;
-  }
-  var trEgo = makeTrail("ego", 0.95);
-  var ringG = new T.TorusGeometry(2.4, 0.16, 8, 40).rotateX(Math.PI / 2), hitRings = [];
-  for (var hr = 0; hr < 8; hr++) { var rm = new T.Mesh(ringG, mat("hit", { transparent: true, opacity: 0.9 }, T.MeshBasicMaterial)); rm.visible = false; scene.add(rm); hitRings.push(rm); }
-  // attention: what each reactive driver is reacting to right now (a line from its bumper to the thing), coloured by why
-  var ATT_N = 48, attGeo = new T.BufferGeometry();
-  attGeo.setAttribute("position", new T.BufferAttribute(new Float32Array(ATT_N * 6), 3)); attGeo.setAttribute("color", new T.BufferAttribute(new Float32Array(ATT_N * 6), 3));
-  var attLines = new T.LineSegments(attGeo, new T.LineBasicMaterial({ vertexColors: true })); attLines.frustumCulled = false; attLines.visible = false; scene.add(attLines);
-  var ATT_COL = { 1: "teal", 2: "ego", 3: "gold", 4: "purple", 5: "purple" };
-  // the safe gap the reactive tailgater wants to keep (IDM s*), painted on the road ahead of it
-  var gapBar = new T.Mesh(PLANE, new T.MeshBasicMaterial({ transparent: true, opacity: 0.4, depthWrite: false })); gapBar.visible = false; scene.add(gapBar);
-
-  // ================================================================== labels overlay (projected per view)
-  var LBL = [], lblPool = [], lblUsed = 0;
-  function label(x, y, z, text, cls) { LBL.push([x, y, z, text, cls]); }
-  function flushLabels(rect) {
-    var v = new T.Vector3();
-    LBL.forEach(function (L) {
-      v.set(L[0], L[1], L[2]).project(camera);
-      if (v.z > 1 || v.z < -1 || Math.abs(v.x) > 1.02 || Math.abs(v.y) > 1.05) return;
-      var el = lblPool[lblUsed]; if (!el) { el = document.createElement("div"); labelsEl.appendChild(el); lblPool.push(el); }
-      lblUsed++;
-      var cn = "lbl" + (L[4] ? " " + L[4] : ""); if (el.className !== cn) el.className = cn; if (el.textContent !== L[3]) el.textContent = L[3];
-      el.style.left = (rect.x + (v.x + 1) / 2 * rect.w).toFixed(1) + "px"; el.style.top = (rect.y + (1 - v.y) / 2 * rect.h).toFixed(1) + "px"; el.style.display = "";
-    });
-    LBL = [];
-  }
-  function endLabels() { for (var i = lblUsed; i < lblPool.length; i++) lblPool[i].style.display = "none"; lblUsed = 0; }
-
   // ================================================================== app state
   var st = { ch: 0, t: 0, playing: !REDUCED, speed: 1, labels: true };
+  var drive = new window.KeyboardDrive(), manualWorld = null, manualRecord = null, manualAcc = 0;
+  st.manual = false;
   // the lab: which planner drives, in which scene
   st.lab = { pl: "labperc", seed: 0, scene: "brake", decel: 6, gap: 10, dv: 11, v0: 14, log: 0, rear: "reactive" };
   var plotDirty = true, lastPlotT = -1;
@@ -367,27 +96,62 @@
   var LABLEARN = { labego: 1, labperc: 1, labfix: 1 };
   var LABCOL = { labidm: "teal", labcv: "ink-3", labego: "purple", labperc: "blue", labfix: "green" };
   var LABSCENE = { brake: "xe dẫn phanh gấp", cutin: "xe cắt vào", log: "log Argoverse thật" };
+  var merges = window.MergeScenes;
+  merges.forEach(function (scene) { LABSCENE[scene.id] = scene.title.toLowerCase(); });
+  var mergeOptions = merges.map(function (scene) { return [scene.id, scene.title]; });
+  var passStages = { "ego-right": "Chuyển sang làn phải", "ego-pass": "Vượt xe ở làn phải", "ego-left": "Trở về làn trái", "ego-done": "Đã vượt và về làn trái" };
+  var requestedScene = new URLSearchParams(location.search).get("scene");
+  st.lab.trajectory = new URLSearchParams(location.search).get("driver") !== "baseline";
+  if ((labReady() && Object.prototype.hasOwnProperty.call(LABSCENE, requestedScene)) ||
+      merges.some(function (scene) { return scene.id === requestedScene; })) st.lab.scene = requestedScene;
+  if (!labReady()) st.lab.pl = "labidm";
   var LAB_T = 14;
   function labSeeds(pl) { return LABLEARN[pl] ? LD.seeds.map(function (_, i) { return i; }) : [0]; }   // one run per training seed for the learned planners
   function labReady() { return !!(LD && S.hasLab()); }
+  function streetScenario() { return merges.find(function (scene) { return scene.id === st.lab.scene; }); }
+  function usesTrajectory() { return st.lab.trajectory && !!streetScenario(); }
+  function currentMerge() { var scene = streetScenario(); return scene && !scene.kind ? scene : null; }
+  function isOvertake() { var scene = streetScenario(); return !!(scene && scene.kind === "overtake"); }
+  function isJourney() { var scene = streetScenario(); return !!(scene && scene.kind === "journey"); }
+  function isStreetDemo() { return isOvertake() || isJourney(); }
+  function sceneDuration() { return isJourney() ? streetScenario().duration : LAB_T; }
+  function markLabel(mark) {
+    return mark.title || passStages[mark.k] || (isJourney() && mark.k === "ped" ? "Người đi bộ qua đường" : "");
+  }
+  function sceneReady() { return labReady() || !!streetScenario(); }
   function labParams() {
     var s = st.lab, p = { pedT0: 1e9, busGo: 1e9, cutT0: 99, tgMode: s.rear === "replay" ? "const" : "idm", react: s.rear === "reactive" ? 0.6 : 0, tgT: 1.4 }, v0 = 11.2;
-    if (s.scene === "brake") { p.brkDecel = s.decel; p.brkDur = 2.4; }
+    p.labTrajectory = usesTrajectory();
+    var merge = currentMerge();
+    if (isStreetDemo()) {
+      v0 = p.egoV0 = 11;
+      var demo = streetScenario();
+      p.labOvertake = isJourney() ? demo.overtake : demo;
+      if (isJourney()) {
+        p.labJourney = demo;
+        p.pedT0 = demo.pedestrianAt;
+        p.pedGap = null;
+        p.pedV = 1.8;
+      }
+    }
+    else if (merge) { v0 = 14; p.egoV0 = v0; p.labMerge = merge; }
+    else if (s.scene === "brake") { p.brkDecel = s.decel; p.brkDur = 2.4; }
     else if (s.scene === "cutin") { v0 = s.v0; p.brkT0 = 99; p.egoV0 = v0; p.labCut = { gap: s.gap, dv: Math.min(s.dv, v0 - 0.5) }; }
     else { var L = LD.logs[s.log]; v0 = L.ego[0]; p.brkT0 = 99; p.egoV0 = v0; p.leadProf = L.lead; p.egoProf = L.ego; p.leadGap0 = L.gap0; }
     p.rearGap = 2 + v0 * 1.4;
     return p;
   }
-  function labKey() { var s = st.lab; return [s.scene, s.decel, s.gap, s.dv, s.v0, s.log, s.rear].join("|"); }
+  function labKey() { var s = st.lab; return [s.scene, s.decel, s.gap, s.dv, s.v0, s.log, s.rear, usesTrajectory()].join("|"); }
   var LABORDER = [];
   function labExec(pl, seed, params) {
-    var R = S.run({ params: params, ego: "planner", planner: pl, policy: { labSeed: LD.seeds[seed] }, others: "reactive", tEnd: LAB_T });
+    var R = S.run({ params: params, ego: params.labTrajectory ? "trajectory" : params.labOvertake ? "overtake" : "planner", planner: pl, policy: { labSeed: LD ? LD.seeds[seed] : undefined }, others: "reactive", tEnd: params.labJourney ? params.labJourney.duration : LAB_T });
     R.m = S.egoMetrics(R, null); return R;
   }
-  function labRun(pl, seed) {
-    var key = "lab|" + pl + "|" + (LABLEARN[pl] ? seed : 0) + "|" + labKey();
-    if (!CACHE[key]) {
-      CACHE[key] = labExec(pl, seed, labParams()); LABORDER.push(key);
+  function labRun(pl, seed, rerun) {
+    var key = "lab|" + (isStreetDemo() || usesTrajectory() ? "demo" : pl + "|" + (LABLEARN[pl] ? seed : 0)) + "|" + labKey();
+    if (rerun || !CACHE[key]) {
+      if (!CACHE[key]) LABORDER.push(key);
+      CACHE[key] = labExec(pl, seed, labParams());
       if (LABORDER.length > 90) LABORDER.splice(0, 40).forEach(function (k) { delete CACHE[k]; });     // a run record is ~0.7 MB: keep memory bounded while a slider is dragged
     }
     return CACHE[key];
@@ -448,22 +212,145 @@
   function fmtGap(x) { return x == null ? "–" : x <= 0 ? "đâm" : fmt(x); }
   function labTable() {
     var el = $("labTbl"); if (!el) return; var rows = labSummary();
-    el.innerHTML = "<tr><th>Bộ điều khiển</th><th>đâm xe trước</th><th>xe sau đâm ta</th><th>cách xe trước, nhỏ nhất (m)</th></tr>" + rows.map(function (r) {
+    var hitLabel = currentMerge() ? "va chạm xe khác" : "đâm xe trước";
+    el.innerHTML = "<tr><th>Bộ điều khiển</th><th>" + hitLabel + "</th><th>xe sau đâm ta</th><th>cách xe trước, nhỏ nhất (m)</th></tr>" + rows.map(function (r) {
       var cnt = function (k) { return r.n > 1 ? k + " / " + r.n + " seed" : (k ? "có" : "không"); }, hot = function (k) { return k ? ' style="color:var(--hit);font-weight:700"' : ""; };
       var g = r.n > 1 && Math.abs(r.gmax - r.gmin) > 0.05 ? fmtGap(r.gmin) + " … " + fmtGap(r.gmax) : fmtGap(r.gmin);
       return '<tr' + (r.pl === st.lab.pl ? ' class="sel"' : "") + "><td>" + r.name + "</td><td" + hot(r.front) + ">" + cnt(r.front) + "</td><td" + hot(r.rear) + ">" + cnt(r.rear) + "</td><td>" + g + "</td></tr>";
     }).join("");
   }
   function labRead() {
-    var el = $("labRead"); if (!el) return; var s = st.lab, R = labRun(s.pl, s.seed), o = labOutcome(R), tg = tgGap(R).filter(function (x) { return x != null; });
-    var first = R.m.hits[0], who = first && (first.a === "TG" || first.b === "TG") ? "xe sau đâm ta" : "ta đâm xe phía trước", res = first ? '<span class="c-hit">' + who + " ở " + fmt(first.t) + " s</span>" : '<span class="c-green">không va chạm</span>';
+    var el = $("labRead"); if (!el) return; var s = st.lab, R = labRun(s.pl, s.seed);
+    if (isJourney() || usesTrajectory()) {
+      el.innerHTML = '<span class="h">' + (usesTrajectory() ? "Kết quả tự lập quỹ đạo" : "Kết quả chuyến lái") + '</span><span>Thời lượng</span><b>' + fmt(sceneDuration()) +
+        ' s</b><span>Va chạm liên quan đến xe ta</span><b>' + R.m.hits.length + '</b>';
+      return;
+    }
+    if (isOvertake()) {
+      var completed = R.marks.find(function (mark) { return mark.k === "ego-done"; });
+      el.innerHTML = '<span class="h">Kết quả lượt mẫu</span><span>Về giữa làn trái</span><b>' +
+        (completed ? fmt(completed.t) + " s" : "Chưa hoàn tất") + "</b><span>Va chạm liên quan đến xe ta</span><b>" + R.m.hits.length + "</b>";
+      return;
+    }
+    var o = labOutcome(R), tg = tgGap(R).filter(function (x) { return x != null; });
+    var first = R.m.hits[0], res = '<span class="c-green">không va chạm</span>';
+    if (first) {
+      var actor = R.actors[first.ib];
+      var who = actor.id === "TG" ? "xe sau đâm ta" : currentMerge() ? "va chạm với " + actor.name : "ta đâm xe phía trước";
+      res = '<span class="c-hit">' + who + " ở " + fmt(first.t) + " s</span>";
+    }
     el.innerHTML = '<span class="h">' + S.PLANNERS[s.pl].name + (LABLEARN[s.pl] ? " · seed " + (s.seed + 1) : "") + "</span>" +
       "<span>kết quả</span><b>" + res + "</b><span>cách xe trước, nhỏ nhất</span><b>" + fmtGap(o.gap) + (o.gap != null && o.gap > 0 ? " m" : "") + "</b>" +
       "<span>TTC nhỏ nhất</span><b>" + (o.ttc > 1e8 ? "–" : fmt(o.ttc) + " s") + "</b><span>phanh mạnh nhất</span><b>" + fmt(o.dec) + " m/s²</b>" +
       "<span>cách xe sau, nhỏ nhất</span><b>" + (tg.length ? (Math.min.apply(null, tg) <= 0 ? "đâm" : fmt(Math.min.apply(null, tg)) + " m") : "–") + "</b>";
   }
+  var nvidiaReview;
+  function createNvidiaReview() {
+    var panel = $("nvidiaReviewTemplate").content.firstElementChild.cloneNode(true);
+    var videoInput = panel.querySelector("[data-review-video]"), player = panel.querySelector("[data-review-player]");
+    var metricsInput = panel.querySelector("[data-review-metrics]"), report = panel.querySelector("[data-review-report]");
+    var videoStatus = panel.querySelector("[data-review-status]"), metricsStatus = panel.querySelector("[data-review-metrics-status]");
+    var clear = panel.querySelector("[data-review-clear]"), videoUrl = null;
+    function removeVideo() {
+      if (!videoUrl) return;
+      player.removeAttribute("src");
+      player.load();
+      URL.revokeObjectURL(videoUrl);
+      videoUrl = null;
+      player.hidden = true;
+    }
+    videoInput.onchange = function () {
+      removeVideo();
+      var file = videoInput.files[0];
+      if (!file) { videoStatus.textContent = ""; return; }
+      clear.hidden = false;
+      if (!/\.mp4$/i.test(file.name)) { videoStatus.textContent = "Hãy chọn video MP4 xuất từ AlpaSim."; return; }
+      videoUrl = URL.createObjectURL(file);
+      player.src = videoUrl;
+      player.hidden = false;
+      videoStatus.textContent = file.name;
+    };
+    player.onerror = function () {
+      if (videoUrl) videoStatus.textContent = "Trình duyệt không đọc được video. Hãy chọn tệp MP4 hợp lệ.";
+    };
+    metricsInput.onchange = async function () {
+      var file = metricsInput.files[0];
+      report.hidden = true;
+      report.textContent = "";
+      metricsStatus.textContent = "";
+      if (!file) return;
+      clear.hidden = false;
+      if (!/\.txt$/i.test(file.name) || file.size > 2 * 1024 * 1024) {
+        metricsStatus.textContent = "Hãy chọn báo cáo TXT có dung lượng tối đa 2 MB.";
+        return;
+      }
+      try {
+        var content = await file.text();
+        if (metricsInput.files[0] !== file) return;
+        report.textContent = content;
+        report.hidden = false;
+        metricsStatus.textContent = file.name;
+      } catch (error) {
+        if (metricsInput.files[0] === file) metricsStatus.textContent = "Không đọc được báo cáo.";
+      }
+    };
+    clear.onclick = function () {
+      videoInput.value = metricsInput.value = "";
+      removeVideo();
+      report.textContent = videoStatus.textContent = metricsStatus.textContent = "";
+      report.hidden = clear.hidden = true;
+    };
+    return panel;
+  }
   function labInsight() {
-    var el = $("labInsight"); if (!el) return; var s = st.lab, rows = labSummary(), by = {}; rows.forEach(function (r) { by[r.pl] = r; });
+    var el = $("labInsight"); if (!el) return;
+    if (isJourney()) {
+      var R = labRun(st.lab.pl, st.lab.seed);
+      var milestones = R.marks.filter(function (mark) { return markLabel(mark); });
+      var wasOpen = journeyArchitecture && journeyArchitecture.open;
+      el.innerHTML = '<p>' + (usesTrajectory() ? 'Ô tô ưu tiên làn trái, xe máy chen sang làn phải. Xe dự báo chuyển động trong 2,4 giây và chọn lệnh lái. Mũi tên chỉ hiện đoạn quỹ đạo còn trống trước xe. Các mốc thay đổi theo quyết định của xe.' :
+        'Chuyến lái mẫu đi qua các tình huống vượt xe, chen làn và nhường đường. Chọn một mốc để xem lại.') + '</p><div class="journey-stages">' +
+        milestones.map(function (mark) {
+          return '<button type="button" data-jump="' + mark.t + '"><span>' + fmt(mark.t) + ' s</span> ' + markLabel(mark) + '</button>';
+        }).join('') + '</div>';
+      el.querySelectorAll("[data-jump]").forEach(function (button) {
+        button.onclick = function () { jumpTo(Number(button.dataset.jump)); };
+      });
+      journeyArchitecture = $("journeyArchitectureTemplate").content.firstElementChild.cloneNode(true);
+      journeyArchitecture.open = !!wasOpen;
+      if (!nvidiaReview) nvidiaReview = createNvidiaReview();
+      nvidiaReview.querySelector("[data-review-local]").textContent = "Tham chiếu lab · " + fmt(sceneDuration()) +
+        " s · " + R.m.hits.length + " va chạm liên quan đến xe ta.";
+      journeyArchitecture.append(nvidiaReview);
+      el.prepend(journeyArchitecture);
+      architectureAction = journeyArchitecture.querySelector("[data-arch-action]");
+      architectureReason = journeyArchitecture.querySelector("[data-arch-reason]");
+      architectureState = journeyArchitecture.querySelector("[data-arch-state]");
+      architectureFrame = null;
+      architectureJumps = journeyArchitecture.querySelectorAll("[data-arch-mark]");
+      architectureJumps.forEach(function (button) {
+        var key = button.dataset.archMark;
+        if (usesTrajectory() && key === "ped-avoid") button.textContent = "Người đi bộ bước xuống đường";
+        var mark = milestones.find(function (m) {
+          return m.k === key || (usesTrajectory() && key === "ped-avoid" && m.k === "ped-step-out");
+        });
+        button.hidden = !mark;
+        if (mark) button.onclick = function () { jumpTo(mark.t); };
+      });
+      return;
+    }
+    journeyArchitecture = null;
+    if (isOvertake()) {
+      el.textContent = usesTrajectory() ? "Xe tự chọn theo xe dẫn, giảm tốc hoặc đổi làn theo khoảng trống dự báo." :
+        "Lượt mẫu chuyển sang làn phải, tăng tốc vượt xe chạy chậm rồi trở về làn trái khi đã tạo đủ khoảng cách.";
+      return;
+    }
+    var merge = currentMerge();
+    if (merge) {
+      el.innerHTML = "<b>" + merge.title + ".</b> Xe bên cạnh bắt đầu chuyển làn ở " + fmt(merge.start) + " s và vào giữa làn xe ta ở " + fmt(merge.start + merge.duration) + " s." + (merge.brake ? " Sau đó xe phanh " + fmt(merge.brake) + " m/s²." : "") + " Mốc màu xanh trên thanh thời gian đánh dấu lúc bắt đầu và kết thúc chuyển làn.";
+      return;
+    }
+    var s = st.lab, rows = labSummary(), by = {}; rows.forEach(function (r) { by[r.pl] = r; });
     var k = function (p) { return by[p].front + "/" + by[p].n; }, t;
     var n = by.labperc.n;
     if (s.scene === "brake") t = "<b>Xe dẫn phanh " + fmt(s.decel) + " m/s²:</b> EgoMLP đâm " + k("labego") + " seed, PercMLP " + k("labperc") + ", PercMLP+ " + k("labfix") + ", IDM " + k("labidm") + ". EgoMLP chỉ nhìn quá khứ tốc độ của chính nó, không thấy xe dẫn; các bộ còn lại có nhìn xe dẫn. Đổi xe sau sang “phát lại”: xe sau không biết ta vừa phanh nên đâm vào đuôi, một “va chạm giả” (cột “xe sau đâm ta”). Sau cú đâm giả đó, các va chạm về sau không được tính vào cột “đâm xe trước”.";
@@ -479,25 +366,49 @@
     }).join("") + "</table>";
   }
   function labRefresh(restart) {
-    if (!labReady()) return; var s = st.lab;
+    var s = st.lab;
     Array.prototype.forEach.call(bodyEl.querySelectorAll("[data-scene]"), function (el) { el.hidden = el.dataset.scene !== s.scene; });
-    Array.prototype.forEach.call($("sLabSeed").children, function (b) { b.disabled = !LABLEARN[s.pl]; });
-    labTable(); labRead(); labInsight();
+    bodyEl.querySelectorAll("[data-follow-only]").forEach(function (el) { el.hidden = isStreetDemo() || usesTrajectory(); });
+    var trajectoryToggle = $("trajectoryToggle");
+    trajectoryToggle.hidden = !streetScenario() || st.manual;
+    $("runLocalTrial").hidden = trajectoryToggle.hidden;
+    trajectoryToggle.setAttribute("aria-pressed", usesTrajectory());
+    trajectoryToggle.textContent = usesTrajectory() ? "Tự lập quỹ đạo · đổi sang lượt mẫu" : "Lượt mẫu · bật tự lập quỹ đạo";
+    var seedButtons = $("sLabSeed");
+    if (seedButtons) Array.prototype.forEach.call(seedButtons.children, function (b) { b.disabled = !LABLEARN[s.pl]; });
+    var merge = currentMerge();
+    $("mergeLegend").hidden = !merge;
+    var viewUrl = new URL(location.pathname, location.origin);
+    if (!wants3D || !$("app").classList.contains("view-3d")) viewUrl.searchParams.set("view", "3d");
+    if (streetScenario()) viewUrl.searchParams.set("scene", s.scene);
+    if (streetScenario() && !usesTrajectory()) viewUrl.searchParams.set("driver", "baseline");
+    $("viewSwitch").href = viewUrl;
+    if (sceneReady()) { if (!isStreetDemo() && !usesTrajectory()) labTable(); labRead(); labInsight(); }
+    timeEl.max = sceneDuration();
     var lg = $("oLabLg"); if (lg) { var L = LD.logs[s.log]; lg.textContent = "#" + L.id + (L.brake ? " · phanh " + fmt(-L.peak_decel) + " m/s²" : " · êm"); }
     if (restart) { st.t = 0; st.playing = !REDUCED; syncPlay(); resetToasts(); }
     plotDirty = true; drawTicks();
   }
 
   var CH = [
-    { key: "lab", short: "8", cam: { dist: 34, yaw: 3.45, pitch: 0.78, lead: 10 }, mode: function () { return "Bài lab · " + S.PLANNERS[st.lab.pl].short + " · " + LABSCENE[st.lab.scene]; },
+    { key: "lab", short: "8", cam: { dist: 34, yaw: 3.45, pitch: 0.78, lead: 10 }, mode: function () {
+      if (usesTrajectory()) return "Driver mô phỏng · tự lập quỹ đạo";
+      if (isStreetDemo()) {
+        var mark = curRun().marks.filter(function (m) { return m.t <= st.t && markLabel(m); }).pop();
+        return mark ? markLabel(mark) : isJourney() ? "Xe ta đang ở làn phải" : "Tiếp cận xe chạy chậm";
+      }
+      return "Bài lab · " + S.PLANNERS[st.lab.pl].short + " · " + LABSCENE[st.lab.scene];
+    },
       html: function () {
-        if (!labReady()) return '<div class="eyebrow">Chương 8 · Bài lab</div><h2>Chưa nạp được dữ liệu của bài lab</h2><p>Trang cần <span class="k">lab_models.js</span> và <span class="k">lab_data.js</span> (model và log của bạn). Chạy xong các bước 3, 4, 6, 7 của bài lab, rồi <span class="k">python3 scripts/export_viz.py</span> và tải lại trang.</p>';
         var s = st.lab;
-        return '<div class="eyebrow">Chương 8 · Bài lab</div><h2>Các model của bài lab lái trong phố này</h2>' +
-          '<p>Các model ở đây được huấn luyện trên <b>log lái xe thật</b> (Argoverse 2: ' + "9.610 cặp xe dẫn và xe theo sau, 10 Hz) bằng bài lab Day 12. Chúng chỉ biết <b>bám xe</b>; đèn đỏ và người qua đường do một lớp luật lo, vì log không có hai thứ đó. Cảnh 3D hiển thị bộ điều khiển đang chọn; bảng so cả năm bộ cùng lúc.</p>" +
+        if (!labReady()) return '<div class="eyebrow">Mô phỏng</div><h2>Chuyển làn và vượt xe</h2>' +
+          seg("sLabScene", mergeOptions, s.scene, "Cảnh") + '<div id="labInsight"></div><div class="read" id="labRead"></div>' +
+          '<p>Để so thêm các model bài lab, chạy xong các bước 3, 4, 6, 7 rồi chạy <span class="k">python scripts/export_viz.py</span> và tải lại trang.</p>';
+        return '<div class="follow-only" data-follow-only><div class="eyebrow">Chương 8 · Bài lab</div><h2>Các model của bài lab lái trong phố này</h2>' +
+          '<p>Các model ở đây được huấn luyện trên <b>log lái xe thật</b> (Argoverse 2: ' + "9.610 cặp xe dẫn và xe theo sau, 10 Hz) bằng bài lab Day 12. Chúng chỉ biết <b>bám xe</b>; đèn đỏ và người qua đường do một lớp luật lo, vì log không có hai thứ đó. Cảnh mô phỏng hiển thị bộ điều khiển đang chọn; bảng so cả năm bộ cùng lúc.</p>" +
           '<div class="lab">Bộ điều khiển</div>' + seg("sLabPl", LABPL, s.pl, "Bộ điều khiển") +
-          '<div class="lab">Seed huấn luyện (mỗi seed là một lần huấn luyện khác của cùng model)</div>' + seg("sLabSeed", LD.seeds.map(function (_, i) { return [i, String(i + 1)]; }), s.seed, "Seed") +
-          '<div class="lab">Cảnh</div>' + seg("sLabScene", [["brake", "Xe dẫn phanh gấp"], ["cutin", "Xe cắt vào"], ["log", "Log thật"]], s.scene, "Cảnh") +
+          '<div class="lab">Seed huấn luyện (mỗi seed là một lần huấn luyện khác của cùng model)</div>' + seg("sLabSeed", LD.seeds.map(function (_, i) { return [i, String(i + 1)]; }), s.seed, "Seed") + '</div>' +
+          '<div class="lab">Cảnh</div>' + seg("sLabScene", [["brake", "Xe dẫn phanh gấp"], ["cutin", "Xe cắt vào"], ["log", "Log thật"]].concat(mergeOptions), s.scene, "Cảnh") +
           '<div class="ctl" data-scene="brake"><div class="sl"><span>Xe dẫn phanh</span><output id="oLabDc">' + fmt(s.decel) + ' m/s²</output><input type="range" id="sLabDc" min="3" max="9" step="0.5" value="' + s.decel + '"></div></div>' +
           '<div class="ctl" data-scene="cutin"><div class="sl"><span>Tốc độ xe ta</span><output id="oLabV0">' + fmt(s.v0) + ' m/s</output><input type="range" id="sLabV0" min="8" max="15" step="1" value="' + s.v0 + '"></div>' +
           '<div class="sl"><span>Khoảng cách tới xe cắt vào</span><output id="oLabGp">' + fmt(s.gap) + ' m</output><input type="range" id="sLabGp" min="3" max="40" step="1" value="' + s.gap + '"></div>' +
@@ -505,12 +416,12 @@
           '<div class="ctl" data-scene="log"><div class="sl"><span>Log Argoverse làm xe dẫn</span><output id="oLabLg">–</output><input type="range" id="sLabLg" min="0" max="' + (LD.logs.length - 1) + '" step="1" value="' + s.log + '"></div></div>' +
           '<div class="ctl" data-scene="log"><div class="row"><button class="btn" type="button" id="bLabAll">Chạy cả ' + LD.logs.length + ' log, cả năm bộ</button></div><div id="labAll"></div></div>' +
           '<div class="lab">Xe bám đuôi (xe ngay sau xe ta)</div>' + seg("sLabRear", [["replay", "Phát lại (không phản ứng)"], ["reactive", "Phản ứng (IDM, trễ 0,6 s)"]], s.rear, "Xe sau") +
-          '<div class="lab">Cả năm bộ điều khiển, cùng cảnh</div><table class="tbl" id="labTbl"></table>' +
+          '<div class="follow-only" data-follow-only><div class="lab">Cả năm bộ điều khiển, cùng cảnh</div><table class="tbl" id="labTbl"></table></div>' +
           '<div class="read" id="labRead"></div><div class="insight" id="labInsight"></div>' +
-          '<canvas class="plot" id="plot" aria-label="Khoảng cách tới xe phía trước theo thời gian"></canvas><div class="legend" id="labLeg"></div>' +
+          '<div class="follow-only" data-follow-only><canvas class="plot" id="plot" aria-label="Khoảng cách tới xe phía trước theo thời gian"></canvas><div class="legend" id="labLeg"></div>' +
           '<div class="lab">Cổng phát hành của bài lab (mã sinh viên ' + LD.student.student_id + ')</div>' + labGateTable() +
           '<p class="note">R1 phát lại tái lập · R2 va chạm trên log · R3 lát cắt xe dẫn phanh · R4 lưới cắt vào · R5 ổn định giữa seed · R6 xe sau phản ứng · R7 độ phủ. Rê chuột lên một dấu để xem số đo. PercMLP+ qua cổng nghĩa là không kém IDM, chưa phải tốt hơn.</p>' +
-          '<div class="try"><b>Thử:</b> cảnh “Xe cắt vào”, 14 m/s, cách 10 m, tiến gần 11 m/s: bộ nào đâm, bộ nào không? Rồi so PercMLP với PercMLP+ ở từng seed. Kết quả là của các model bạn đã huấn luyện, nên có thể khác ví dụ trong lời giảng.</div>';
+          '<div class="try"><b>Thử:</b> cảnh “Xe cắt vào”, 14 m/s, cách 10 m, tiến gần 11 m/s: bộ nào đâm, bộ nào không? Rồi so PercMLP với PercMLP+ ở từng seed. Kết quả là của các model bạn đã huấn luyện, nên có thể khác ví dụ trong lời giảng.</div></div>';
       },
       plot: function (P, t) {
         var A = axes(P, 0, LAB_T, -5, 40, [0, 4, 8, 12], [0, 10, 20, 30, 40], "thời gian (s)", "cách xe trước (m)"), g = P.g;
@@ -524,9 +435,8 @@
   ];
 
   // ---------------------------------------------------------------- which run is on screen
-  function curRun() { return labReady() ? labRun(st.lab.pl, st.lab.seed) : LOG; }
+  function curRun() { return st.manual ? manualRecord : sceneReady() ? labRun(st.lab.pl, st.lab.seed) : LOG; }
   function tMax() { var R = curRun(); return ((R.nf || NF) - 1) * DT; }
-  function marksOf(R) { return R.marks || []; }
   function tgGap(R) {
     var out = new Array(R.nf || NF), it = IDX.TG, N = R.N;
     for (var f = 0; f < out.length; f++) {
@@ -538,75 +448,25 @@
 
   // ---------------------------------------------------------------- what is on screen: one view
   function viewsFor() {
-    return labReady() ? [{ R: labRun(st.lab.pl, st.lab.seed), attention: true, egoAttention: true, gapBar: st.lab.rear === "reactive" }] : [{ R: LOG }];
+    if (st.manual) return [{ R: manualRecord }];
+    return sceneReady() ? [{ R: curRun(), attention: true, egoAttention: true, gapBar: st.lab.rear === "reactive" }] : [{ R: LOG }];
   }
-  function layoutViews(n) {
-    var W = stage.clientWidth, H = stage.clientHeight;
-    if (n === 1) return [{ x: 0, y: 0, w: W, h: H }];
-    var rail = document.querySelector(".rail"), overlay = getComputedStyle(rail).position === "absolute";
-    var x0 = overlay ? Math.round(rail.getBoundingClientRect().right - stage.getBoundingClientRect().left + 10) : 0, h = overlay ? H - 84 : H, w = W - x0;
-    if (w > h * 1.1) { var hw = Math.floor((w - 6) / 2); return [{ x: x0, y: 0, w: hw, h: h }, { x: x0 + hw + 6, y: 0, w: w - hw - 6, h: h }]; }
-    var hh = Math.floor((h - 6) / 2); return [{ x: x0, y: 0, w: w, h: hh }, { x: x0, y: hh + 6, w: w, h: h - hh - 6 }];
-  }
-
-  // ---------------------------------------------------------------- reactive agents: attention lines, state labels, the tailgater's safe gap
-  function drawAttention(R, t, ego, egoToo) {
-    var f = clamp(Math.round(t / DT), 0, (R.nf || NF) - 1), N = R.N, pa = attGeo.attributes.position.array, ca = attGeo.attributes.color.array, n = 0;
-    function seg2(x0, z0, x1, z1, col) { if (n >= ATT_N) return; pa.set([x0, 1.2, z0, x1, 1.2, z1], n * 6); ca.set([col.r, col.g, col.b, col.r, col.g, col.b], n * 6); n++; }
-    function target(i, lead, p) {
-      if (lead >= 0) { var q = pose(R, lead, t); return [q.x, q.z]; }
-      var ln = ACT[i].lane.charAt(0);
-      return ln === "E" ? [ROAD.stopE, p.z] : ln === "W" ? [ROAD.stopW, p.z] : [p.x, ACT[i].lane === "SB" ? -ROAD.stopN : ROAD.stopN];
-    }
-    if (R.LS) for (var i = 1; i < N; i++) {
-      var k = (f * N + i) * 2, lead = R.LS[k], code = R.LS[k + 1]; if (!ATT_COL[code] || (lead < 0 && lead !== -2)) continue;
-      var p = pose(R, i, t); if (Math.abs(p.x - ego.x) > 80 || Math.abs(p.z - ego.z) > 60) continue;
-      var a = ACT[i], tg = target(i, lead, p);
-      seg2(p.x + p.hx * a.dims.len / 2, p.z + p.hz * a.dims.len / 2, tg[0], tg[1], PAL[ATT_COL[code]]);
-    }
-    if (egoToo && R.EGO) { var le = R.EGO[f * 4 + 2]; if (le >= 0 || le === -2) { var tg2 = le >= 0 ? (function () { var q = pose(R, le, t); return [q.x, q.z]; })() : [ROAD.stopE, ego.z]; seg2(ego.x + ego.hx * 2.3, ego.z + ego.hz * 2.3, tg2[0], tg2[1], PAL.ego); } }
-    attGeo.setDrawRange(0, n * 2); attGeo.attributes.position.needsUpdate = true; attGeo.attributes.color.needsUpdate = true; attLines.visible = n > 0;
-  }
-  function stateLabels(R, t, ego) {
-    var f = clamp(Math.round(t / DT), 0, (R.nf || NF) - 1), N = R.N, n = 0;
-    for (var i = 1; i < N && n < 7; i++) {
-      var a = ACT[i], code = R.LS ? R.LS[(f * N + i) * 2 + 1] : 0, p = pose(R, i, t), txt = null;
-      if (Math.hypot(p.x - ego.x, p.z - ego.z) > 55) continue;
-      if (code === 4) txt = a.kind === "ped" ? "chờ qua đường" : a.id === "BUS" ? "chờ người đi bộ" : "chờ khe hở";
-      else if (code === 7 && a.id === "P1") txt = "đang qua đường";
-      else if (code === 3) txt = "nhường người đi bộ";
-      else if (code === 5) txt = "đang chen làn";
-      else if (code === 2 && p.v > 0.3) txt = "dừng vì đèn";
-      if (a.kind !== "ped" && p.acc < -2) txt = (txt ? txt + " · " : "") + "phanh " + fmt(-p.acc) + " m/s²";
-      if (txt) { label(p.x, heightOf(a) + 1.1, p.z, (a.id === "TG" ? "bám đuôi: " : "") + txt, "state"); n++; }
-    }
-  }
-  function heightOf(a) { return a.kind === "bus" ? 3.0 : a.kind === "ped" ? 1.8 : a.kind === "moto" ? 1.8 : 1.7; }
-  function drawGapBar(R, t, ego) {
-    var p = pose(R, IDX.TG, t), gap = ego.x - p.x - S.CAR.len;
-    if (Math.abs(p.z - ego.z) > 2 || gap < -S.CAR.len || gap > 50) { gapBar.visible = false; return; }
-    var P = { T: 1.4, a: 2.0, b: 3.2, s0: 1.4 };   // the rear driver of the lab scenes (see labParams: tgT = 1.4 s, calibrated on the logs)
-    var sStar = P.s0 + Math.max(0, p.v * P.T + p.v * (p.v - ego.v) / (2 * Math.sqrt(P.a * P.b))), ok = gap >= sStar;
-    gapBar.scale.set(Math.max(0.3, sStar), 1, 1.7); gapBar.position.set(p.x + S.CAR.len / 2 + sStar / 2, 0.07, p.z); gapBar.material.color.copy(ok ? PAL.teal : PAL.hit); gapBar.visible = true;
-    label(p.x + S.CAR.len / 2 + sStar / 2, 0.6, p.z + 2.6, "muốn ≥ " + fmt(sStar) + " m · đang " + fmt(Math.max(0, gap)) + " m", ok ? "plan" : "hit");
-  }
-
   // ---------------------------------------------------------------- binding
   var bodyEl = $("body");
   function go() {
     var c = CH[0]; st.ch = 0;
     bodyEl.innerHTML = c.html(); bodyEl.scrollTop = 0;
     bind(c);
-    setCam("follow"); camTo(c.cam, 1300); VT[0].snap = VT[1].snap = true;
+    view.reset("follow", c.cam);
     st.t = 0; st.playing = !REDUCED;
     resetToasts(); plotDirty = true; drawTicks(); syncPlay();
   }
   function bind() {
     function segBind(id, fn) { var el = $(id); if (!el) return; Array.prototype.forEach.call(el.querySelectorAll("button"), function (b) { b.onclick = function () { Array.prototype.forEach.call(el.querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", x === b); }); fn(b.dataset.v); plotDirty = true; drawTicks(); }; }); }
-    if (!labReady()) return;
+    segBind("sLabScene", function (v) { st.lab.scene = v; labRefresh(true); });
+    if (!labReady()) { labRefresh(false); return; }
     segBind("sLabPl", function (v) { st.lab.pl = v; labRefresh(true); });
     segBind("sLabSeed", function (v) { st.lab.seed = +v; labRefresh(true); });
-    segBind("sLabScene", function (v) { st.lab.scene = v; labRefresh(true); });
     segBind("sLabRear", function (v) { st.lab.rear = v; labRefresh(true); });
     [["sLabDc", "decel", "oLabDc", " m/s²"], ["sLabV0", "v0", "oLabV0", " m/s"], ["sLabGp", "gap", "oLabGp", " m"], ["sLabDv", "dv", "oLabDv", " m/s"], ["sLabLg", "log", null, ""]].forEach(function (c3) {
       $(c3[0]).oninput = function () { st.lab[c3[1]] = +this.value; if (c3[2]) $(c3[2]).textContent = fmt(st.lab[c3[1]]) + c3[3]; clearTimeout(st.lbT); st.lbT = setTimeout(function () { labRefresh(true); }, 200); };
@@ -617,24 +477,93 @@
 
   // ---------------------------------------------------------------- transport bar
   var playBtn = $("play"), timeEl = $("time"), treadEl = $("tread");
-  function syncPlay() { playBtn.textContent = st.playing ? "❚❚" : "▶"; playBtn.setAttribute("aria-label", st.playing ? "Dừng" : "Chạy"); }
+  $("trajectoryToggle").onclick = function () { st.lab.trajectory = !st.lab.trajectory; labRefresh(true); };
+  $("runLocalTrial").onclick = function () {
+    st.lab.trajectory = true;
+    labRun(st.lab.pl, st.lab.seed, true);
+    labRefresh(false);
+    restartRun();
+  };
+  function jumpTo(t) {
+    if (st.manual) return;
+    st.t = t; st.playing = false; resetToasts(); syncPlay();
+  }
+  function syncPlay() {
+    playBtn.textContent = st.playing ? "❚❚" : "▶"; playBtn.setAttribute("aria-label", st.playing ? "Dừng" : "Chạy");
+    if (st.manual) $("driveStatus").textContent = manualWorld.done ? "Hết lượt lái. Nhấn R để chạy lại." : st.playing ? "Đang lái · Giữ W hoặc ↑ để tăng tốc" : "Đã tạm dừng · Nhấn P để tiếp tục";
+  }
+  function restartManual() {
+    drive.clear(); manualAcc = 0;
+    manualWorld = new S.World({ params: sceneReady() ? labParams() : {}, ego: "manual", others: "reactive", tEnd: sceneDuration() });
+    manualWorld.step({ acc: 0, steer: 0 });
+    manualRecord = manualWorld.record();
+    st.t = 0; st.playing = true;
+    resetToasts(); $("toast").hidden = true; drawTicks(); syncPlay();
+  }
+  function restartRun() {
+    if (st.manual) { restartManual(); return; }
+    st.t = 0; loopStartedAt = null; resetToasts(); st.playing = true; syncPlay();
+  }
   function togglePlay() {
+    drive.clear();
+    if (st.manual) {
+      if (manualWorld.done) { restartManual(); return; }
+      st.playing = !st.playing; syncPlay(); return;
+    }
     if (!st.playing && st.t >= tMax() - 0.01) st.t = 0;
     st.playing = !st.playing; syncPlay();
   }
   playBtn.onclick = togglePlay;
-  $("restart").onclick = function () { st.t = 0; resetToasts(); st.playing = true; syncPlay(); };
+  $("restart").onclick = restartRun;
+  view.canvas.tabIndex = 0;
+  view.canvas.setAttribute("aria-label", "Vùng lái xe: W A S D hoặc phím mũi tên, Space phanh, P tạm dừng, R chạy lại");
+  $("driveToggle").onclick = function () {
+    st.manual = !st.manual; drive.clear();
+    this.setAttribute("aria-pressed", String(st.manual));
+    this.textContent = st.manual ? "Trở về chế độ model tự lái" : "Tự lái bằng bàn phím";
+    $("manualHelp").hidden = !st.manual; bodyEl.hidden = st.manual;
+    $("trajectoryToggle").hidden = st.manual || !streetScenario();
+    $("runLocalTrial").hidden = $("trajectoryToggle").hidden;
+    timeEl.disabled = st.manual; $("speed").disabled = st.manual;
+    if (st.manual) {
+      st.speed = 1; $("speed").textContent = "1×";
+      restartManual(); view.reset("chase"); view.canvas.focus({ preventScroll: true });
+    } else {
+      manualWorld = manualRecord = null; go();
+    }
+  };
+  function editing(target) { return target && target.closest && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"); }
+  document.addEventListener("keydown", function (e) {
+    if (!st.manual || editing(e.target) || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+    if (e.code === "Space" && e.target.closest("button")) return;
+    if (e.code === "KeyP" || e.code === "KeyR") {
+      e.preventDefault(); if (!e.repeat) { if (e.code === "KeyP") togglePlay(); else restartRun(); } return;
+    }
+    if (drive.set(e.code, st.playing && !manualWorld.done)) e.preventDefault();
+  });
+  document.addEventListener("keyup", function (e) { drive.set(e.code, false); });
+  function pauseManual() { drive.clear(); if (st.manual && st.playing) { st.playing = false; syncPlay(); } }
+  window.addEventListener("blur", pauseManual);
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pauseManual(); });
+  document.addEventListener("focusin", function (e) { if (editing(e.target)) pauseManual(); });
   var SPEEDS = [0.5, 1, 2, 4];
   $("speed").onclick = function () { st.speed = SPEEDS[(SPEEDS.indexOf(st.speed) + 1) % SPEEDS.length]; this.textContent = String(st.speed).replace(".", ",") + "×"; };
-  timeEl.addEventListener("input", function () { st.t = clamp(+timeEl.value, 0, tMax()); resetToasts(); });
-  $("camBtn").onclick = function () { setCam(rig.mode === "follow" ? "chase" : rig.mode === "chase" ? "free" : "follow"); if (rig.mode === "follow") camTo(CH[st.ch].cam, 900); };
+  timeEl.addEventListener("input", function () { st.t = clamp(+timeEl.value, 0, tMax()); loopStartedAt = null; resetToasts(); });
+  $("camBtn").onclick = function () { view.cycle(CH[st.ch].cam); };
   $("themeBtn").onclick = function () { var r = document.documentElement, cur = r.getAttribute("data-theme"); var dark = cur ? cur === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches; r.setAttribute("data-theme", dark ? "light" : "dark"); applyPal(); };
   if (window.matchMedia) { var mq = window.matchMedia("(prefers-color-scheme: dark)"); if (mq.addEventListener) mq.addEventListener("change", applyPal); }
   new MutationObserver(function () { applyPal(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   function drawTicks() {
-    var el = $("ticks"), VS = viewsFor(), out = [], T_RUN = LAB_T;
-    VS.forEach(function (v) { (v.R.events || []).forEach(function (e) { if (e.ego) out.push([e.t, "var(--hit)"]); }); });
-    el.innerHTML = out.map(function (o) { return '<i style="left:' + (o[0] / T_RUN * 100).toFixed(2) + "%;background:" + o[1] + '"></i>'; }).join("");
+    var el = $("ticks"), VS = viewsFor(), out = [], T_RUN = sceneDuration();
+    var merge = currentMerge();
+    if (merge) {
+      out.push([merge.start, "var(--teal)", "Bắt đầu chen làn"], [merge.start + merge.duration, "var(--teal)", "Vào giữa làn đích"]);
+    }
+    VS.forEach(function (v) {
+      v.R.marks.forEach(function (mark) { var title = markLabel(mark); if (title) out.push([mark.t, "var(--teal)", title]); });
+      (v.R.events || []).forEach(function (e) { if (e.ego) out.push([e.t, "var(--hit)"]); });
+    });
+    el.innerHTML = out.map(function (o) { return '<i style="left:' + (o[0] / T_RUN * 100).toFixed(2) + "%;background:" + o[1] + '" title="' + (o[2] || "Sự kiện xe ta") + '"></i>'; }).join("");
   }
 
   // ---------------------------------------------------------------- toasts for ego events during playback
@@ -647,7 +576,7 @@
       (v.R.events || []).forEach(function (e, i) {
         var k = vi + ":" + i; if (!e.ego || seen[k] || e.t > st.t || e.t < lastT - 0.001) return; seen[k] = 1;
         var pre = VIEWS.length > 1 ? (vi === 0 ? "Bên trái: " : "Bên phải: ") : "", replay = v.R.opts && v.R.opts.others === "replay";
-        if (e.type === "hit") toast(pre + "va chạm xe ta – " + ACT[e.ib].name + " lúc " + fmt(e.t) + " s" + (replay ? " (xe phát lại không phanh: va chạm ảo)" : ""));
+        if (e.type === "hit") toast(pre + "va chạm xe ta – " + v.R.actors[e.ib].name + " lúc " + fmt(e.t) + " s" + (replay ? " (xe phát lại không phanh: va chạm ảo)" : ""));
         else if (e.type === "red") toast(pre + "xe ta vượt đèn đỏ lúc " + fmt(e.t) + " s");
         else if (e.type === "off") toast(pre + "xe ta ra khỏi lòng đường lúc " + fmt(e.t) + " s");
       });
@@ -656,51 +585,193 @@
   }
 
   // ---------------------------------------------------------------- frame loop
-  function resize() { var w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix(); plotDirty = true; }
+  var decisionCard = $("decisionCard"), decisionSource = $("decisionSource"), decisionLane = $("decisionLane"), decisionAction = $("decisionAction"), decisionReason = $("decisionReason"), decisionRear = $("decisionRear"), decisionTraffic = $("decisionTraffic");
+  var loopButtons = $("decisionLoop").querySelectorAll("button"), loopStep = $("decisionLoopStep"), loopDetail = $("decisionLoopDetail");
+  var selectedLoopStep = null, activeLoopStep = -1, loopStartedAt = null;
+  loopButtons.forEach(function (button, index) {
+    button.onclick = function () {
+      jumpTo(st.t);
+      selectedLoopStep = { frame: Math.floor(st.t / DT + 1e-9), index: index };
+    };
+  });
+  var journeyArchitecture, architectureAction, architectureReason, architectureState, architectureFrame, architectureJumps;
+  $("openJourneyArchitecture").onclick = function () {
+    if (!journeyArchitecture) return;
+    journeyArchitecture.open = true;
+    journeyArchitecture.querySelector("summary").focus({ preventScroll: true });
+    journeyArchitecture.scrollIntoView({ block: "nearest" });
+  };
+  var decisions = {
+    "plan-left": ["Chọn hướng sang trái", "Bộ lập kế hoạch chọn hoặc tiếp tục đổi sang làn trái theo khoảng trống dự báo."],
+    "plan-right": ["Chọn hướng sang phải", "Bộ lập kế hoạch chọn hoặc tiếp tục đổi sang làn phải theo khoảng trống dự báo."],
+    "plan-keep": ["Giữ làn", "Duy trì làn đang chọn và điều chỉnh tốc độ theo dự báo."],
+    "plan-brake": ["Giảm tốc, giữ hướng", "Giảm tốc cho kết quả tốt hơn trong dự báo khoảng cách."],
+    "plan-intersection": ["Giảm tốc khi tới ngã tư", "Hạ tốc độ trước vạch và giữ tốc độ thấp khi qua giao lộ."],
+    "plan-yellow": ["Giảm tốc khi đèn vàng", "Xe chọn quỹ đạo dừng trước vạch và chờ đèn xanh."],
+    "plan-signal": ["Dừng trước vạch trắng", "Xe chờ trước vạch cho đến khi đèn xanh."],
+    "plan-caution": ["Giảm tốc trước vạch qua đường", "Có người chờ sát mép đường. Xe giảm tốc để sẵn sàng nhường."],
+    "plan-yield": ["Nhường người đi bộ", "Chừa khoảng dừng vì người đi bộ có thể đổi hướng."],
+    "plan-emergency": ["Phanh khẩn cấp", "Các phương án đều có xung đột dự báo. Chọn phanh mạnh để giảm rủi ro."],
+    approach: ["Giữ làn phải", "Theo dõi xe phía trước trước khi bắt đầu vượt."],
+    "wait-pass": ["Chờ khoảng trống", "Làn trái chưa đủ khoảng hở để chuyển làn."],
+    "ego-left": ["Chuyển sang trái", "Làn trái đủ khoảng hở để vượt xe phía trước."],
+    "ego-pass": ["Vượt bên trái", "Giữ làn trái cho đến khi đủ khoảng cách để về phải."],
+    "ego-right": ["Về làn phải", "Đã vượt xe phía trước và làn phải đủ khoảng hở."],
+    "ego-done": ["Ổn định ở làn phải", "Đã hoàn tất thao tác vượt."],
+    cruise: ["Tiếp tục đi thẳng", "Bộ điều khiển giữ làn và điều chỉnh về tốc độ mục tiêu."],
+    follow: ["Giữ khoảng cách", "Điều chỉnh tốc độ theo xe phía trước."],
+    caution: ["Giảm tốc quan sát", "Tầm nhìn ở vạch qua đường bị che khuất."],
+    yield: ["Nhường người đi bộ", "Giảm tốc trước vùng người đi bộ có thể cắt qua."],
+    red: ["Phanh trước đèn đỏ", "Giữ làn và giảm tốc trước vạch dừng."],
+    "ped-approach": ["Đi tiếp ở làn phải", "Làn phải đủ khoảng hở để tiếp cận vạch qua đường."],
+    "ped-watch": ["Quan sát người đi bộ", "Người đi bộ đã bước xuống đường. Xe ta đang giữ làn phải."],
+    "ped-wait": ["Giảm tốc trước người đi bộ", "Người đi bộ ở gần đường xe chạy. Bộ điều khiển chưa chọn chuyển làn."],
+    "ped-avoid": ["Né người đi bộ sang trái", "Người đi bộ đang lùi về vỉa hè. Xe ta chọn làn trái khi đủ khoảng hở."],
+    "ped-returned": ["Giữ làn trái để đi qua", "Người đi bộ đã lên vỉa hè. Xe ta tiếp tục theo hướng vừa chọn."],
+    "ped-clear": ["Đi tiếp ở làn trái", "Xe ta đã đi qua vị trí người đi bộ."],
+  };
+  function showDecision(guide, record) {
+    if (decisionCard.hidden !== !guide) decisionCard.hidden = !guide;
+    if (!guide) return;
+    $("openJourneyArchitecture").hidden = !isJourney();
+    var d = guide.decision, text = decisions[d.action], reason = text[1];
+    var source = d.path ? "Driver mô phỏng" : "Quyết định của xe ta";
+    if (decisionSource.textContent !== source) decisionSource.textContent = source;
+    if (d.action === "approach") {
+      var leadState = record.LS[(guide.frame * record.N + d.lead) * 2 + 1];
+      if (guide.braking) {
+        text = ["Giảm tốc, giữ làn phải"];
+        reason = "Khoảng hở với xe phía trước đang ngắn. Xe ta điều chỉnh tốc độ trước khi vượt.";
+      } else if (leadState === 5) {
+        reason = "Ô tô đang chen sang phải. Xe ta giữ hướng trong khi theo dõi xe đó.";
+      } else if (record.F[(guide.frame * record.N + d.lead) * 8 + 5] < -4) {
+        reason = "Ô tô vừa chen vào đang phanh gấp. Xe ta giữ làn trước khi bắt đầu vượt.";
+      }
+    } else if (d.action === "follow" && record.actors[d.lead]) {
+      reason = "Điều chỉnh tốc độ theo " + record.actors[d.lead].name + " phía trước.";
+    } else if (d.action === "plan-yellow" || d.action === "plan-signal") {
+      reason = record.F[guide.frame * record.N * 8 + 4] < .05 ?
+        "Xe đã dừng và đang chờ đèn xanh." : "Xe chủ động giảm tốc về điểm dừng trước vạch trắng.";
+      reason += " Cách vạch trắng " + fmt(d.stopGap) + " m.";
+    }
+    if (d.path) reason += " Đã loại " + d.rejected + "/" + d.total + " phương án trong dự báo " + fmt(d.horizon) + " s.";
+    if (decisionCard.dataset.tone !== guide.color) decisionCard.dataset.tone = guide.color;
+    var lane = (d.targetZ < S.LANES.E2.pts[0][1] ? "Làn trái" : "Làn phải") + (guide.braking ? " · Giảm tốc" : "");
+    if (decisionLane.textContent !== lane) decisionLane.textContent = lane;
+    if (decisionAction.textContent !== text[0]) decisionAction.textContent = text[0];
+    if (decisionReason.textContent !== reason) decisionReason.textContent = reason;
+    var rearPass = record.params.labJourney && record.params.labJourney.rearPass;
+    decisionTraffic.hidden = !rearPass || !(record.F[(guide.frame * record.N + IDX[rearPass.actor]) * 8 + 7] & 2);
+    var rear = d.rear;
+    decisionRear.hidden = !rear;
+    if (rear) {
+      var rearText = rear.index < 0 ? "Phía sau cùng làn: trống trong 40 m." :
+        "Phía sau cùng làn: có " + record.actors[rear.index].name + " cách " + fmt(rear.gap) + " m." +
+          (rear.close ? " Ưu tiên giảm tốc sớm và êm." : "");
+      if (decisionRear.textContent !== rearText) decisionRear.textContent = rearText;
+    }
+  }
+  function trafficLoopDetail(record, frame, ego) {
+    var stateText = { 5: "đang chuyển làn", 6: "đang phanh gấp", 7: "đang di chuyển" };
+    var distance = 45, detail = "";
+    for (var i = 1; i < record.N; i++) {
+      var actorFrame = frame * record.N + i, state = stateText[record.LS[actorFrame * 2 + 1]];
+      if (!state) continue;
+      var k = actorFrame * 8, d = Math.hypot(record.F[k] - ego.x, record.F[k + 1] - ego.z);
+      if (d >= distance) continue;
+      distance = d;
+      detail = record.actors[i].name + " " + state + ".";
+    }
+    return detail ? "Gần xe ta: " + detail + " Cập nhật cảnh cho bước sau." :
+      "Cập nhật vị trí xe khác và người đi bộ cho bước sau.";
+  }
+  function showDecisionLoop(guide, record, ego, now) {
+    if (st.playing || !guide || (selectedLoopStep && selectedLoopStep.frame !== guide.frame)) selectedLoopStep = null;
+    var animate = !!guide && st.playing && !REDUCED;
+    if (!animate) loopStartedAt = null;
+    if (!guide) return;
+    // Each recorded frame has already gone through all phases. Use a separate UI clock.
+    if (animate && loopStartedAt == null) loopStartedAt = now;
+    var step = animate ? Math.floor((now - loopStartedAt) / 1800) % loopButtons.length :
+      selectedLoopStep ? selectedLoopStep.index : 1;
+    if (step !== activeLoopStep) {
+      if (activeLoopStep >= 0) loopButtons[activeLoopStep].removeAttribute("aria-current");
+      loopButtons[step].setAttribute("aria-current", "step");
+      loopStep.textContent = (step + 1) + "/" + loopButtons.length;
+      activeLoopStep = step;
+    }
+    var detail;
+    switch (step) {
+      case 0:
+        detail = "Khung " + fmt(guide.frame * DT, 2) + " s · xe ta " + Math.round(ego.v * 3.6) + " km/h · " + (record.N - 1) + " tác nhân.";
+        break;
+      case 1:
+        detail = decisionAction.textContent + " · lệnh gia tốc " + fmt(record.F[guide.frame * record.N * 8 + 5]) + " m/s².";
+        break;
+      case 2:
+        detail = trafficLoopDetail(record, guide.frame, ego);
+        break;
+      case 3:
+        if (guide.frame + 1 < record.nf) {
+          var next = pose(record, 0, (guide.frame + 1) * DT);
+          detail = "Áp dụng ga/phanh và góc lái · khung kế " + fmt((guide.frame + 1) * DT, 2) +
+            " s · xe ta " + fmt(next.v * 3.6) + " km/h.";
+        } else {
+          detail = "Đã tới khung cuối của lượt chạy.";
+        }
+        break;
+    }
+    if (loopDetail.textContent !== detail) loopDetail.textContent = detail;
+  }
+  function showArchitecture(guide, record) {
+    if (!journeyArchitecture || !journeyArchitecture.open) return;
+    architectureJumps.forEach(function (button) { if (button.disabled !== !guide) button.disabled = !guide; });
+    var action = guide ? fmt(guide.frame * DT, 2) + " s · " + decisionAction.textContent : "Đang tự lái bằng bàn phím";
+    var reason = guide ? decisionLane.textContent + " — " + decisionReason.textContent :
+      "Thoát chế độ tự lái để xem lại quyết định của bộ điều khiển tại từng mốc.";
+    if (architectureAction.textContent !== action) architectureAction.textContent = action;
+    if (architectureReason.textContent !== reason) architectureReason.textContent = reason;
+    var frame = guide ? guide.frame : null;
+    if (architectureFrame === frame) return;
+    architectureFrame = frame;
+    if (!guide) {
+      architectureState.textContent = "";
+      return;
+    }
+    var sample = S.rendererFrame(record, frame);
+    architectureState.textContent = "Pose tham chiếu cho renderer tại " + sample.timestampUs +
+      " µs · x " + fmt(sample.ego.x) + " m, z " + fmt(sample.ego.z) + " m · " + sample.actors.length + " tác nhân khác.";
+  }
+  function resize() { view.resize(); plotDirty = true; }
   window.addEventListener("resize", resize);
   var last = performance.now(), uiT = 0;
   function frame(now) {
     var dtReal = Math.min(0.1, (now - last) / 1000); last = now;
-    // adaptive resolution: if frames stay slower than ~40 fps for a second, render fewer pixels
-    if (dtReal > 0.025) slowAcc += dtReal; else slowAcc = Math.max(0, slowAcc - dtReal * 0.5);
-    if (slowAcc > 1 && PR > 1) { PR = Math.max(1, PR - 0.25); renderer.setPixelRatio(PR); resize(); slowAcc = 0; }
     var c = CH[0];
-    if (st.playing) { var tm = tMax(); st.t += dtReal * st.speed; if (st.t >= tm) { st.t = tm; st.playing = false; syncPlay(); } }
-    var t = st.t, VIEWS = viewsFor(), RECT = layoutViews(VIEWS.length), egoLast = null, Wc = stage.clientWidth, Hc = stage.clientHeight;
-    stepTween(); paintLights(t);
-    renderer.setScissorTest(false); renderer.setViewport(0, 0, Wc, Hc); renderer.clear();
-    VIEWS.forEach(function (v, vi) {
-      var R = v.R, rect = RECT[vi];
-      for (var i = 0; i < NA; i++) place(actorObj[i], ACT[i], pose(R, i, t), t);
-      var ego = pose(R, 0, t); egoLast = ego;
-      showTrail(trEgo, R, 0, 0.12, t);
-      if (v.attention) { drawAttention(R, t, ego, v.egoAttention); stateLabels(R, t, ego); } else attLines.visible = false;
-      if (v.gapBar) drawGapBar(R, t, ego); else gapBar.visible = false;
-      var hits = (R.events || []).filter(function (e) { return e.type === "hit" && e.ego && e.t <= t + 1e-6; });
-      hitRings.forEach(function (rm, n) { var e = hits[n]; rm.visible = !!e; if (e) { rm.position.set(e.x, 0.3, e.z); var s = 1 + 0.15 * Math.sin(now / 160); rm.scale.set(s, 1, s); } });
-      hits.forEach(function (e) { label(e.x, 4.6, e.z, "va chạm", "hit"); });
-      label(ego.x, 2.6, ego.z, "xe ta", "ego");
-      if (st.labels) ["L1", "TG", "C2", "BUS", "P1", "NR", "MB"].forEach(function (id) { var q = pose(R, IDX[id], t); if (Math.hypot(q.x - ego.x, q.z - ego.z) < 60) label(q.x, ACT[IDX[id]].kind === "bus" ? 3.6 : 2.4, q.z, ACT[IDX[id]].name, ""); });
-      sun.position.set(ego.x + 40, 90, ego.z + 30); sun.target.position.set(ego.x, 0, ego.z);
-      placeCamera(dtReal, ego, vi);
-      camera.aspect = rect.w / Math.max(1, rect.h); camera.updateProjectionMatrix();
-      renderer.setScissorTest(false); renderer.setViewport(0, 0, Wc, Hc);
-      renderer.render(scene, camera);
-      flushLabels(rect);
-    });
-    endLabels();
-    var ego = egoLast;
+    if (st.playing && st.manual) {
+      manualAcc += dtReal;
+      while (manualAcc >= DT && !manualWorld.done) { manualWorld.step(drive.command()); manualAcc -= DT; }
+      manualRecord = manualWorld.record(); st.t = (manualRecord.nf - 1) * DT;
+      if (manualWorld.done) { st.playing = false; drive.clear(); syncPlay(); }
+    } else if (st.playing) { var tm = tMax(); st.t += dtReal * st.speed; if (st.t >= tm) { st.t = tm; st.playing = false; syncPlay(); } }
+    var t = st.t, VIEWS = viewsFor(), record = VIEWS[0].R, ego = pose(record, 0, t);
+    VIEWS[0].guide = S.guidanceAt(record, t, ego);
+    showDecision(VIEWS[0].guide, record);
+    showDecisionLoop(VIEWS[0].guide, record, ego, now);
+    showArchitecture(VIEWS[0].guide, record);
+    view.draw(VIEWS[0], t, dtReal, st.labels, now);
     // HUD + transport (throttled)
     if (now - uiT > 80) {
       uiT = now;
       $("hudV").textContent = Math.round(ego.v * 3.6);
-      var mh = c.mode(); if (mh !== st.lastMode) { $("hudMode").innerHTML = mh; st.lastMode = mh; }
+      $("hudAcc").textContent = fmt(ego.acc) + " m/s²";
+      var mh = st.manual ? "<b>Bàn phím</b> · " + (sceneReady() ? LABSCENE[st.lab.scene] : "Lái trong phố") : sceneReady() ? c.mode() : "Bài lab"; if (mh !== st.lastMode) { $("hudMode").innerHTML = mh; st.lastMode = mh; }
       timeEl.value = t; treadEl.textContent = fmt(t) + " s";
       if (toastT && now > toastT) { $("toast").hidden = true; toastT = 0; }
     }
     eventToasts(VIEWS);
     var cv = $("plot");
-    if (cv && c.plot) {
+    if (cv && c.plot && !isStreetDemo() && !usesTrajectory()) {
       var rebuild = plotDirty || PB.cv !== cv;
       if (rebuild) {   // data changed: draw the series once and keep a copy
         var P = plotSetup(cv), A = c.plot(P, t);
@@ -718,6 +789,6 @@
   applyPal(); resize();
   timeEl.max = LAB_T;
   go();
-  window.__replayLab = { egoX: function () { return actorObj[0].position.x; }, pr: function () { return PR; } };   // read-only probe for automated checks
+  window.__replayLab = { egoX: function () { return pose(curRun(), 0, st.t).x; }, pr: function () { return view.pixelRatio(); }, driving: function () { return { manual: st.manual, playing: st.playing, t: st.t, ego: manualWorld ? Object.assign({}, manualWorld.ego) : null, command: drive.command() }; } };   // read-only probe for automated checks
   requestAnimationFrame(frame);
 })();

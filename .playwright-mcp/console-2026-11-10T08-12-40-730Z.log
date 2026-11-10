@@ -1,0 +1,24 @@
+[     800ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://www.kaggle.com/code/nguynvnt11/notebook1b76812009:1
+[    1202ms] [LOG]  _                       _       
+| |    Welcome to       | |      
+| | __ ___   __ _  __ _ | | ___  
+| |/ /|__ \ / _` |/ _` || |/ _ \ 
+|   < / _  | (_| | (_| || |  __/ 
+|_|\_\\__,_|\__, |\__, ||_|\___| 
+             __/ | __/ |         
+            |___/ |___/          
+ @ https://www.kaggle.com/static/assets/app.js?v=ad5226d65f5328d3:1
+[    1290ms] [WARNING] No `HydrateFallback` element provided to render during initial hydration @ https://www.kaggle.com/static/assets/vendor.js?v=d65bb8768740f992:249
+[    1580ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://www.kaggle.com/api/i/kernels.LegacyKernelsService/GetKernelViewModel:1
+[   60009ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://www.kaggle.com/code/nguynvnt11/notebook1b76812009:1
+[   60122ms] [LOG]  _                       _       
+| |    Welcome to       | |      
+| | __ ___   __ _  __ _ | | ___  
+| |/ /|__ \ / _` |/ _` || |/ _ \ 
+|   < / _  | (_| | (_| || |  __/ 
+|_|\_\\__,_|\__, |\__, ||_|\___| 
+             __/ | __/ |         
+            |___/ |___/          
+ @ https://www.kaggle.com/static/assets/app.js?v=ad5226d65f5328d3:1
+[   60232ms] [WARNING] No `HydrateFallback` element provided to render during initial hydration @ https://www.kaggle.com/static/assets/vendor.js?v=d65bb8768740f992:249
+[   60525ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://www.kaggle.com/api/i/kernels.LegacyKernelsService/GetKernelViewModel:1

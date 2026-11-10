@@ -1,0 +1,8 @@
+[  608093ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js:0
+[  655028ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js:0
+[  682265ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js:0
+[  712674ms] TypeError: Cannot redefine property: createRoute3D
+    at Object.defineProperty (<anonymous>)
+    at <anonymous>:4:12
+    at <anonymous>:15:5
+    at <anonymous>:16:7

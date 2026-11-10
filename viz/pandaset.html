@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PandaSet · Kiểm thử vòng kín</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#eef2f6;color:#172235;font:15px/1.5 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:20px}
+  h1{margin:4px 0;font-size:clamp(22px,4vw,32px)}p{margin:8px 0}a{color:#146b86}.controls,.legend{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap;margin:14px 0}
+  button,select{font:inherit;color:inherit;background:white;border:1px solid #c7d2df;border-radius:6px;padding:5px 9px;cursor:pointer}
+  button[aria-pressed="true"]{background:#153b53;color:white;border-color:#153b53}
+  input[type="range"]{flex:1;min-width:140px}.panels{display:grid;grid-template-columns:1.25fr 1fr;gap:12px}
+  .panel{background:white;border:1px solid #d5dee8;border-radius:9px;overflow:hidden;margin:0}.panel figcaption{padding:7px 10px;font-weight:650}
+  #world{width:100%;height:clamp(260px,42vw,430px);background:#dce7ee}#world canvas{display:block;width:100%;height:100%}
+  #camera{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#182333}
+  .legend b{color:#146fa3}.legend strong{color:#087c67}.legend i{color:#a15908;font-style:normal}
+  table{width:100%;border-collapse:collapse;background:white;margin:12px 0}th,td{padding:7px 10px;border:1px solid #d5dee8;text-align:left}
+  #decision{font-weight:650}#status{color:#a33b21}@media(max-width:730px){.panels{grid-template-columns:1fr}}
+</style>
+<main>
+  <a href="./?view=3d&amp;scene=continuous-drive">← Chuyến lái liên hoàn</a>
+  <h1>PandaSet · Phát lại và kiểm thử vòng kín</h1>
+  <p>Đối chiếu ảnh camera ghi thật với quỹ đạo xe ta trong mô phỏng.</p>
+  <div class="controls">
+    <label>Cảnh <select id="scene"></select></label>
+    <label>Tác nhân đang xem <select id="mode"><option value="simulation">Mô phỏng</option><option value="replay">Bản ghi thật</option></select></label>
+    <button id="three" type="button" aria-pressed="true">3D</button>
+    <button id="bev" type="button" aria-pressed="false">BEV</button>
+  </div>
+  <div class="panels">
+    <figure class="panel"><figcaption>Trạng thái và quỹ đạo</figcaption><div id="world" aria-label="Vị trí xe và người đi bộ"></div></figure>
+    <figure class="panel"><figcaption>Camera trước · bản ghi PandaSet</figcaption><img id="camera" alt="Ảnh camera trước theo mốc đang xem"></figure>
+  </div>
+  <div class="controls"><button id="play" type="button">Phát</button><button id="restart" type="button">Về đầu</button>
+    <input id="time" type="range" min="0" max="0" value="0" aria-label="Thời gian"><output id="clock">0,00 s</output></div>
+  <div class="legend"><b>━━ Quỹ đạo ghi thật</b><strong>━━ Quỹ đạo mô phỏng</strong><i>━ Quỹ đạo Driver vừa chọn</i></div>
+  <p id="decision"></p><p id="status" role="status">Đang đọc dữ liệu PandaSet…</p>
+  <table aria-label="So sánh hai lượt chạy">
+    <thead><tr><th>Chỉ số</th><th>Bản ghi thật</th><th>Mô phỏng</th></tr></thead>
+    <tbody id="metrics"></tbody>
+  </table>
+  <p>Vạch làn được ước lượng từ hướng xe ghi thật. Phép đo khoảng hở dùng hộp 3D chiếu xuống mặt đường và kích thước xe ta của lab. Xe chạy theo sau có thể giảm tốc theo xe ta. Ảnh camera luôn lấy từ bản ghi.</p>
+</main>
+<script src="sim.js?v=pandaset-1"></script>
+<script src="pandaset-sim.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="pandaset-view.js"></script>
+</html>
